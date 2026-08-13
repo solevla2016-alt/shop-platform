@@ -1,10 +1,152 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ru">
 <head>
-    <meta charset="UTF-8">
-    <title>Title</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Shop Platform 2.0</title>
+  <link rel="stylesheet" href="css/styles.css" />
 </head>
 <body>
+  <header class="topbar">
+    <div class="brand">SHOP PLATFORM 2.0</div>
 
+    <nav id="nav" class="nav hidden">
+      <button data-action="nav-view" data-view="catalog" class="nav-btn active">Каталог</button>
+      <button data-action="nav-view" data-view="cart" class="nav-btn">Корзина</button>
+      <button data-action="nav-view" data-view="orders" class="nav-btn">Заказы</button>
+      <button data-action="nav-view" data-view="admin" class="nav-btn hidden" id="admin-nav">Админ</button>
+    </nav>
+
+    <div id="user-box" class="user-box hidden">
+      <span id="user-name"></span>
+      <button data-action="logout" class="btn btn-secondary">Выйти</button>
+    </div>
+  </header>
+
+  <main class="container">
+    <section id="view-auth" class="view">
+      <div class="auth-grid">
+        <article class="card">
+          <h2>Вход</h2>
+          <form id="login-form" class="stack">
+            <label>Email или телефон</label>
+            <input id="login-identifier" type="text" required />
+
+            <label>Пароль</label>
+            <input id="login-password" type="password" required />
+
+            <button class="btn" type="submit">Войти</button>
+          </form>
+        </article>
+
+        <article class="card">
+          <h2>Регистрация</h2>
+          <form id="register-form" class="stack">
+            <label>ФИО</label>
+            <input id="register-full-name" type="text" required />
+
+            <label>Email</label>
+            <input id="register-email" type="email" required />
+
+            <label>Телефон</label>
+            <input id="register-phone" type="text" placeholder="+79991234567" required />
+
+            <label>Пароль</label>
+            <input id="register-password" type="password" required />
+
+            <label>Подтверждение пароля</label>
+            <input id="register-password-confirm" type="password" required />
+
+            <button class="btn" type="submit">Создать аккаунт</button>
+          </form>
+        </article>
+      </div>
+    </section>
+
+    <section id="view-catalog" class="view hidden">
+      <div class="card">
+        <h2>Каталог товаров</h2>
+
+        <div class="filters">
+          <input id="filter-name" type="text" placeholder="Поиск по названию" />
+          <input id="filter-min-price" type="number" min="0" placeholder="Цена от" />
+          <input id="filter-max-price" type="number" min="0" placeholder="Цена до" />
+
+          <select id="filter-sort-by">
+            <option value="created_at">По дате</option>
+            <option value="price">По цене</option>
+            <option value="name">По названию</option>
+          </select>
+
+          <select id="filter-sort-order">
+            <option value="desc">По убыванию</option>
+            <option value="asc">По возрастанию</option>
+          </select>
+
+          <label id="inactive-filter" class="checkbox hidden">
+            <input id="filter-include-inactive" type="checkbox" />
+            показывать неактивные
+          </label>
+
+          <button data-action="search-products" class="btn btn-secondary">Найти</button>
+        </div>
+
+        <div id="products" class="grid"></div>
+
+        <div class="pagination">
+          <button data-action="page-prev" class="btn btn-secondary">Назад</button>
+          <span id="page-info"></span>
+          <button data-action="page-next" class="btn btn-secondary">Вперёд</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="view-cart" class="view hidden">
+      <div class="card">
+        <h2>Корзина</h2>
+        <div id="cart-items" class="stack"></div>
+
+        <div class="cart-footer">
+          <div id="cart-total" class="total"></div>
+
+          <div class="actions">
+            <button data-action="clear-cart" class="btn btn-secondary">Очистить корзину</button>
+            <button data-action="checkout" class="btn">Оформить заказ</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="view-orders" class="view hidden">
+      <div class="card">
+        <h2>Мои заказы</h2>
+        <div id="orders" class="stack"></div>
+      </div>
+    </section>
+
+    <section id="view-admin" class="view hidden">
+      <div class="card">
+        <h2>Админ-панель</h2>
+
+        <form id="create-product-form" class="filters">
+          <input id="product-name" type="text" placeholder="Название товара" required />
+          <input id="product-price" type="number" min="0" placeholder="Цена" required />
+
+          <label class="checkbox">
+            <input id="product-is-active" type="checkbox" checked />
+            активен
+          </label>
+
+          <button class="btn" type="submit">Создать товар</button>
+        </form>
+
+        <div id="admin-products" class="stack"></div>
+      </div>
+    </section>
+  </main>
+
+  <div id="toast" class="toast hidden"></div>
+
+  <script src="js/app.js"></script>
 </body>
 </html>
