@@ -1,5 +1,3 @@
-"""Order models."""
-
 from datetime import datetime
 
 from sqlalchemy import DateTime, ForeignKey, Integer, String, func
@@ -19,8 +17,10 @@ class Order(Base):
         index=True,
         nullable=False,
     )
-    status: Mapped[str] = mapped_column(String(20), default="created", nullable=False)
+    status: Mapped[str] = mapped_column(String(20), default="pending_payment", nullable=False)
+    payment_method: Mapped[str | None] = mapped_column(String(50), nullable=True)
     total_amount: Mapped[int] = mapped_column(Integer, nullable=False)
+    paid_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),

@@ -1,5 +1,4 @@
-"""Order endpoints."""
-
+from datetime import datetime, timezone
 from typing import List
 
 from fastapi import APIRouter, Depends, status
@@ -13,7 +12,7 @@ from app.db.session import get_db
 from app.models.cart import Cart, CartItem
 from app.models.order import Order, OrderItem
 from app.models.user import User
-from app.schemas.order import OrderOut
+from app.schemas.order import OrderOut, PaymentRequest
 
 router = APIRouter(prefix="/orders", tags=["Orders"])
 
@@ -62,7 +61,7 @@ async def checkout(
 
     order = Order(
         user_id=user.id,
-        status="created",
+        status="pending_payment",
         total_amount=total_amount,
         items=order_items,
     )
@@ -77,6 +76,80 @@ async def checkout(
         .options(selectinload(Order.items))
         .where(Order.id == order.id)
     )
+
+    return order
+
+
+@router.post(
+    "/{order_id}/pay",
+    response_model=OrderOut,
+    summary="Pay for order",
+)
+async def pay_order(
+    order_id: int,
+    payload: PaymentRequest,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Simulate payment for order."""
+    order = await db.scalar(
+        select(Order)
+        .options(selectinload(Order.items))
+        .where(Order.id == order_id)
+    )
+
+    if order is None or (order.user_id != user.id and not user.is_admin):
+        raise NotFoundError()
+
+    if order.status == "paid":
+        raise BadRequestError("Order is already paid")
+
+    if order.status == "cancelled":
+        raise BadRequestError("Order is cancelled")
+
+    if payload.payment_method not in ["card", "sbp", "cash"]:
+        raise BadRequestError("Invalid payment method")
+
+    order.status = "paid"
+    order.payment_method = payload.payment_method
+    order.paid_at = datetime.now(timezone.utc)
+
+    await db.commit()
+    await db.refresh(order)
+
+    return order
+
+
+@router.post(
+    "/{order_id}/cancel",
+    response_model=OrderOut,
+    summary="Cancel order",
+)
+async def cancel_order(
+    order_id: int,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Cancel unpaid order."""
+    order = await db.scalar(
+        select(Order)
+        .options(selectinload(Order.items))
+        .where(Order.id == order_id)
+    )
+
+    if order is None or (order.user_id != user.id and not user.is_admin):
+        raise NotFoundError()
+
+    if order.status == "paid":
+        raise BadRequestError("Cannot cancel paid order")
+
+    if order.status == "cancelled":
+        raise BadRequestError("Order is already cancelled")
+
+    order.status = "cancelled"
+
+    await db.commit()
+    await db.refresh(order)
 
     return order
 

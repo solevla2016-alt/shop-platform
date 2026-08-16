@@ -6,6 +6,8 @@ from pydantic import BaseModel, ConfigDict, Field
 
 class ProductBase(BaseModel):
     name: str = Field(min_length=1, max_length=255)
+    description: Optional[str] = Field(default=None, max_length=2000)
+    image_url: Optional[str] = Field(default=None, max_length=500)
     price: int = Field(ge=0)
     is_active: bool = True
 
@@ -16,6 +18,8 @@ class ProductCreate(ProductBase):
 
 class ProductUpdate(BaseModel):
     name: Optional[str] = Field(default=None, min_length=1, max_length=255)
+    description: Optional[str] = Field(default=None, max_length=2000)
+    image_url: Optional[str] = Field(default=None, max_length=500)
     price: Optional[int] = Field(default=None, ge=0)
     is_active: Optional[bool] = None
 
