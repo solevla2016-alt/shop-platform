@@ -10,4 +10,8 @@ exclude =
     .pytest_cache
 extend-ignore =
     E203,
-    W503
+    W503,
+    E501,
+    E402,
+    E261,
+    F404

@@ -2,7 +2,7 @@
 
 import math
 from dataclasses import dataclass
-from typing import Annotated, List, Literal, Optional
+from typing import Annotated, Literal, Optional
 
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy import func, select

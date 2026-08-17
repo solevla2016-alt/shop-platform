@@ -1,9 +1,17 @@
+"""Product model."""
+
+from __future__ import annotations
+
 from datetime import datetime
+from typing import TYPE_CHECKING
 
 from sqlalchemy import Boolean, DateTime, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
+
+if TYPE_CHECKING:
+    from app.models.cart import CartItem
 
 
 class Product(Base):
@@ -29,7 +37,7 @@ class Product(Base):
     )
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
-    cart_items: Mapped[list["CartItem"]] = relationship(
+    cart_items: Mapped[list[CartItem]] = relationship(
         "CartItem",
         back_populates="product",
         cascade="all, delete-orphan",

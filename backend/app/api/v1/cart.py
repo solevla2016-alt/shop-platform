@@ -5,7 +5,7 @@ from typing import Dict, List
 from fastapi import APIRouter, Depends, Response, status
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import joinedload, selectinload
+from sqlalchemy.orm import selectinload
 
 from app.api.deps import get_current_user
 from app.core.exceptions import BadRequestError, NotFoundError

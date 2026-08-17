@@ -1,15 +1,22 @@
 """Cart models."""
 
+from __future__ import annotations
+
 from datetime import datetime
+from typing import TYPE_CHECKING
 
 from sqlalchemy import DateTime, ForeignKey, Integer, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
 
+if TYPE_CHECKING:
+    from app.models.product import Product
+    from app.models.user import User  # noqa: F401
+
 
 class Cart(Base):
-    """User cart."""
+    """User shopping cart."""
 
     __tablename__ = "carts"
 
@@ -17,7 +24,6 @@ class Cart(Base):
     user_id: Mapped[int] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"),
         unique=True,
-        index=True,
         nullable=False,
     )
     created_at: Mapped[datetime] = mapped_column(
@@ -32,8 +38,7 @@ class Cart(Base):
         nullable=False,
     )
 
-    user: Mapped["User"] = relationship("User", back_populates="cart")
-    items: Mapped[list["CartItem"]] = relationship(
+    items: Mapped[list[CartItem]] = relationship(
         "CartItem",
         back_populates="cart",
         cascade="all, delete-orphan",
@@ -41,10 +46,12 @@ class Cart(Base):
 
 
 class CartItem(Base):
-    """Product inside cart."""
+    """Line item in a shopping cart."""
 
     __tablename__ = "cart_items"
-    __table_args__ = (UniqueConstraint("cart_id", "product_id", name="uq_cart_product"),)
+    __table_args__ = (
+        UniqueConstraint("cart_id", "product_id", name="uq_cart_product"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     cart_id: Mapped[int] = mapped_column(
@@ -59,5 +66,5 @@ class CartItem(Base):
     )
     quantity: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
 
-    cart: Mapped["Cart"] = relationship("Cart", back_populates="items")
-    product: Mapped["Product"] = relationship("Product", back_populates="cart_items")
+    cart: Mapped[Cart] = relationship("Cart", back_populates="items")
+    product: Mapped[Product] = relationship("Product", back_populates="cart_items")
