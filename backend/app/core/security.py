@@ -19,10 +19,10 @@ def hash_password(password: str) -> str:
     return hashpw(password.encode("utf-8"), gensalt()).decode("utf-8")
 
 
-def verify_password(password: str, hashed_password: str) -> bool:
+def verify_password(password: str, password_hash: str) -> bool:
     """Verify password against hash."""
     try:
-        return checkpw(password.encode("utf-8"), hashed_password.encode("utf-8"))
+        return checkpw(password.encode("utf-8"), password_hash.encode("utf-8"))
     except ValueError:
         return False
 

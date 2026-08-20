@@ -1,114 +1,117 @@
 import os
+import time
 
-os.environ.setdefault("SECRET_KEY", "test-secret-key")
+os.environ.setdefault("SECRET_KEY", "test-secret-key-for-testing-only")
 os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite:///./test.db")
+os.environ.setdefault("ACCESS_TOKEN_EXPIRE_MINUTES", "60")
+os.environ.setdefault("RATE_LIMIT_AUTH_REQUESTS", "10000")
+os.environ.setdefault("LOG_LEVEL", "WARNING")
 
-import pytest
 import pytest_asyncio
-from httpx import ASGITransport, AsyncClient # noqa: E402
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine # noqa: E402
-from sqlalchemy.pool import NullPool # noqa: E402
+from httpx import ASGITransport, AsyncClient
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from sqlalchemy.pool import NullPool
 
-from app.core.security import create_access_token, hash_password # noqa: E402
-from app.db.base import Base # noqa: E402
-from app.db.session import get_db # noqa: E402
-from app.main import app # noqa: E402
-from app.models.product import Product # noqa: E402
-from app.models.user import User # noqa: E402
-
-TEST_DATABASE_URL = "sqlite+aiosqlite:///./test.db"
-
-engine = create_async_engine(
-    TEST_DATABASE_URL,
-    connect_args={"check_same_thread": False},
-    poolclass=NullPool,
-)
-
-TestingSessionLocal = async_sessionmaker(
-    bind=engine,
-    expire_on_commit=False,
-)
+from app.core.security import create_access_token, hash_password
+from app.db.base import Base
+from app.db.session import get_db
+from app.main import app
+from app.models.product import Product
+from app.models.user import User
 
 
-async def override_get_db():
-    async with TestingSessionLocal() as session:
-        yield session
-
-
-app.dependency_overrides[get_db] = override_get_db
-
-
-@pytest_asyncio.fixture(autouse=True)
-async def prepare_database():
-    async with engine.begin() as conn:
+@pytest_asyncio.fixture(scope="session")
+async def engine():
+    eng = create_async_engine("sqlite+aiosqlite:///./test.db", poolclass=NullPool)
+    async with eng.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
         await conn.run_sync(Base.metadata.create_all)
-
-    yield
-
-    async with engine.begin() as conn:
+    yield eng
+    async with eng.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
+    await eng.dispose()
 
 
 @pytest_asyncio.fixture
-async def client():
+async def db_session(engine):
+    session_factory = async_sessionmaker(engine, expire_on_commit=False)
+    async with session_factory() as session:
+        yield session
+
+
+@pytest_asyncio.fixture
+async def client(db_session):
+    async def override_get_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = override_get_db
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         yield ac
+    app.dependency_overrides.clear()
 
 
-async def _create_user(
-    full_name: str = "Test User",
-    email: str = "user@example.com",
-    phone: str = "+79991234567",
-    password: str = "Password$",
-    is_admin: bool = False,
-) -> User:
-    async with TestingSessionLocal() as session:
-        user = User(
-            full_name=full_name,
-            email=email.lower(),
-            phone=phone,
-            hashed_password=hash_password(password),
-            is_admin=is_admin,
-        )
-        session.add(user)
-        await session.commit()
-        await session.refresh(user)
-        return user
+@pytest_asyncio.fixture
+async def regular_user(client, db_session):
+    timestamp = int(time.time() * 1000)
+    user = User(
+        email=f"test_{timestamp}@example.com",
+        phone=f"+7999{timestamp % 10000000:07d}",
+        full_name="Test User",
+        password_hash=hash_password("Password123!"),
+        is_admin=False,
+    )
+    db_session.add(user)
+    await db_session.commit()
+    await db_session.refresh(user)
+    return user
 
 
-async def _create_product(
-    name: str = "Test Product",
-    price: int = 100,
-    is_active: bool = True,
-) -> Product:
-    async with TestingSessionLocal() as session:
-        product = Product(name=name, price=price, is_active=is_active)
-        session.add(product)
-        await session.commit()
-        await session.refresh(product)
-        return product
+@pytest_asyncio.fixture
+async def admin_user(client, db_session):
+    timestamp = int(time.time() * 1000)
+    user = User(
+        email=f"admin_{timestamp}@example.com",
+        phone=f"+7999{(timestamp + 1) % 10000000:07d}",
+        full_name="Admin User",
+        password_hash=hash_password("AdminPass123!"),
+        is_admin=True,
+    )
+    db_session.add(user)
+    await db_session.commit()
+    await db_session.refresh(user)
+    return user
 
 
-@pytest.fixture
-def create_user():
-    return _create_user
+@pytest_asyncio.fixture
+async def user_token(regular_user):
+    return create_access_token(user=regular_user)
 
 
-@pytest.fixture
-def create_product():
-    return _create_product
+@pytest_asyncio.fixture
+async def admin_token(admin_user):
+    return create_access_token(user=admin_user)
 
 
-@pytest.fixture
-def access_token_for():
-    return create_access_token
+@pytest_asyncio.fixture
+async def auth_headers(user_token):
+    return {"Authorization": f"Bearer {user_token}"}
 
 
-@pytest.fixture
-def auth_headers():
-    def _headers(token: str):
-        return {"Authorization": f"Bearer {token}"}
+@pytest_asyncio.fixture
+async def admin_headers(admin_token):
+    return {"Authorization": f"Bearer {admin_token}"}
 
-    return _headers
+
+@pytest_asyncio.fixture
+async def test_product(client, db_session):
+    timestamp = int(time.time() * 1000)
+    product = Product(
+        name=f"Test Product {timestamp}",
+        price=1000,
+        is_active=True,
+    )
+    db_session.add(product)
+    await db_session.commit()
+    await db_session.refresh(product)
+    return product

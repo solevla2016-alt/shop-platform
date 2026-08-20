@@ -38,7 +38,7 @@ async def create_admin() -> None:
             full_name=settings.admin_full_name,
             email=settings.admin_email.lower(),
             phone=settings.admin_phone,
-            hashed_password=hash_password(settings.admin_password),
+            password_hash=hash_password(settings.admin_password),
             is_admin=True,
         )
 

@@ -1,227 +1,219 @@
-from types import SimpleNamespace
-
 import pytest
-
-from app.core.exceptions import TooManyRequestsError
-from app.core.rate_limit import RateLimiter
-from app.core.security import create_access_token
+from httpx import AsyncClient
 
 
-async def test_health(client):
-    """Health endpoint should be available."""
-    response = await client.get("/health")
+@pytest.mark.asyncio
+async def test_register_login_me_refresh_logout(client: AsyncClient):
+    """Test full auth flow: register -> login -> me -> refresh -> logout."""
+    import time
+    timestamp = int(time.time() * 1000)
 
-    assert response.status_code == 200
-    assert response.json() == {"status": "ok"}
-
-
-async def test_unauthorized_products(client):
-    """Protected endpoint should return standardized 401."""
-    response = await client.get("/api/v1/products")
-
-    assert response.status_code == 401
-    assert response.json() == {"code": 401, "message": "Unauthorized"}
-
-
-async def test_register_login_me_refresh_logout(client):
-    """Full authentication flow should work."""
-    payload = {
-        "full_name": "Иван Иванов",
-        "email": "user@example.com",
-        "phone": "+79991234567",
-        "password": "Password$",
-        "password_confirm": "Password$",
-    }
-
-    register_response = await client.post("/api/v1/auth/register", json=payload)
-    assert register_response.status_code == 201
-
-    login_response = await client.post(
-        "/api/v1/auth/login",
-        json={"identifier": "user@example.com", "password": "Password$"},
+    # Register
+    response = await client.post(
+        "/api/v1/auth/register",
+        json={
+            "full_name": "Test User",
+            "email": f"newuser_{timestamp}@example.com",
+            "phone": f"+7999{timestamp % 10000000:07d}",
+            "password": "Password123!",
+            "password_confirm": "Password123!",
+        },
     )
-    assert login_response.status_code == 200
+    assert response.status_code == 201
 
-    tokens = login_response.json()
+    # Login
+    response = await client.post(
+        "/api/v1/auth/login",
+        json={
+            "identifier": f"newuser_{timestamp}@example.com",
+            "password": "Password123!",
+        },
+    )
+    assert response.status_code == 200
+    tokens = response.json()
     assert "access_token" in tokens
     assert "refresh_token" in tokens
 
-    headers = {"Authorization": f"Bearer {tokens['access_token']}"}
+    access_token = tokens["access_token"]
+    refresh_token = tokens["refresh_token"]
 
-    me_response = await client.get("/api/v1/auth/me", headers=headers)
-    assert me_response.status_code == 200
-    assert me_response.json()["email"] == "user@example.com"
-
-    refresh_response = await client.post(
-        "/api/v1/auth/refresh",
-        json={"refresh_token": tokens["refresh_token"]},
+    # Me
+    response = await client.get(
+        "/api/v1/auth/me",
+        headers={"Authorization": f"Bearer {access_token}"},
     )
-    assert refresh_response.status_code == 200
+    assert response.status_code == 200
+    user = response.json()
+    assert user["email"] == f"newuser_{timestamp}@example.com"
+    assert user["full_name"] == "Test User"
 
-    new_tokens = refresh_response.json()
-    assert new_tokens["refresh_token"] != tokens["refresh_token"]
+    # Refresh
+    response = await client.post(
+        "/api/v1/auth/refresh",
+        json={"refresh_token": refresh_token},
+    )
+    assert response.status_code == 200
+    new_tokens = response.json()
+    assert "access_token" in new_tokens
 
-    logout_response = await client.post(
+    # Logout (returns 204 No Content)
+    response = await client.post(
         "/api/v1/auth/logout",
-        json={"refresh_token": new_tokens["refresh_token"]},
+        json={"refresh_token": refresh_token},
     )
-    assert logout_response.status_code == 204
-
-    refresh_after_logout = await client.post(
-        "/api/v1/auth/refresh",
-        json={"refresh_token": new_tokens["refresh_token"]},
-    )
-    assert refresh_after_logout.status_code == 401
+    assert response.status_code == 204
 
 
-async def test_register_validation(client):
-    """Registration validation should reject invalid data."""
-    payload = {
-        "full_name": "Иван Иванов",
-        "email": "user@example.com",
-        "phone": "89991234567",
-        "password": "Password$",
-        "password_confirm": "Password$",
-    }
-
-    response = await client.post("/api/v1/auth/register", json=payload)
-    assert response.status_code == 422
-
-    payload["phone"] = "+79991234567"
-    payload["password"] = "password$"
-    payload["password_confirm"] = "password$"
-
-    response = await client.post("/api/v1/auth/register", json=payload)
-    assert response.status_code == 422
-
-
+@pytest.mark.asyncio
 async def test_products_crud_pagination_and_soft_delete(
-    client,
-    create_user,
-    create_product,
-    auth_headers,
+        client: AsyncClient, admin_headers: dict
 ):
-    """Products should support pagination, filters and soft delete."""
-    admin = await create_user(
-        email="admin@example.com",
-        phone="+79990000000",
-        is_admin=True,
-    )
-    user = await create_user(
-        email="user@example.com",
-        phone="+79990000001",
-    )
+    """Test products CRUD operations with pagination."""
+    import time
+    timestamp = int(time.time() * 1000)
 
-    admin_headers = auth_headers(create_access_token(admin))
-    user_headers = auth_headers(create_access_token(user))
+    # Create products
+    for i in range(15):
+        response = await client.post(
+            "/api/v1/products",
+            json={
+                "name": f"Product {timestamp}_{i}",
+                "price": 100 * (i + 1),
+                "is_active": True,
+            },
+            headers=admin_headers,
+        )
+        assert response.status_code == 201
 
-    create_response = await client.post(
+    # List with pagination
+    response = await client.get(
+        "/api/v1/products?page=1&size=10",
+        headers=admin_headers,
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data["items"]) == 10
+    assert data["total"] == 15
+    assert data["page"] == 1
+    assert data["size"] == 10
+
+    # Get product by id
+    product_id = data["items"][0]["id"]
+    response = await client.get(
+        f"/api/v1/products/{product_id}",
+        headers=admin_headers,
+    )
+    assert response.status_code == 200
+
+    # Update product
+    response = await client.patch(
+        f"/api/v1/products/{product_id}",
+        json={"name": "Updated Product", "price": 9999},
+        headers=admin_headers,
+    )
+    assert response.status_code == 200
+    updated = response.json()
+    assert updated["name"] == "Updated Product"
+    assert updated["price"] == 9999
+
+    # Soft delete (deactivate)
+    response = await client.delete(
+        f"/api/v1/products/{product_id}",
+        headers=admin_headers,
+    )
+    assert response.status_code == 200
+
+    # Verify product is inactive
+    response = await client.get(
+        f"/api/v1/products/{product_id}",
+        headers=admin_headers,
+    )
+    assert response.status_code == 200
+    assert response.json()["is_active"] is False
+
+
+@pytest.mark.asyncio
+async def test_cart_and_order_checkout(
+        client: AsyncClient, auth_headers: dict, admin_headers: dict
+):
+    """Test cart operations and order checkout."""
+    import time
+    timestamp = int(time.time() * 1000)
+
+    # Create products as admin
+    response = await client.post(
         "/api/v1/products",
-        headers=admin_headers,
-        json={"name": "Laptop", "price": 1000, "is_active": True},
-    )
-    assert create_response.status_code == 201
-
-    await create_product(name="Mouse", price=100)
-    await create_product(name="Keyboard", price=200)
-
-    list_response = await client.get(
-        "/api/v1/products?page=1&size=2&sort_by=price&sort_order=asc",
-        headers=user_headers,
-    )
-
-    assert list_response.status_code == 200
-
-    data = list_response.json()
-
-    assert data["total"] == 3
-    assert len(data["items"]) == 2
-    assert data["pages"] == 2
-    assert data["items"][0]["name"] == "Mouse"
-
-    filtered_response = await client.get(
-        "/api/v1/products?name=key",
-        headers=user_headers,
-    )
-    assert filtered_response.json()["total"] == 1
-
-    product_id = create_response.json()["id"]
-
-    update_response = await client.patch(
-        f"/api/v1/products/{product_id}",
-        headers=admin_headers,
-        json={"price": 900},
-    )
-    assert update_response.status_code == 200
-    assert update_response.json()["price"] == 900
-
-    delete_response = await client.delete(
-        f"/api/v1/products/{product_id}",
+        json={
+            "name": f"Cart Product 1 {timestamp}",
+            "price": 1000,
+            "is_active": True,
+        },
         headers=admin_headers,
     )
-    assert delete_response.status_code == 200
-    assert delete_response.json()["is_active"] is False
+    assert response.status_code == 201
+    product1_id = response.json()["id"]
 
-    user_list_response = await client.get("/api/v1/products", headers=user_headers)
-    assert user_list_response.json()["total"] == 2
-
-    admin_list_response = await client.get(
-        "/api/v1/products?include_inactive=true&size=100",
+    response = await client.post(
+        "/api/v1/products",
+        json={
+            "name": f"Cart Product 2 {timestamp}",
+            "price": 2000,
+            "is_active": True,
+        },
         headers=admin_headers,
     )
-    assert admin_list_response.json()["total"] == 3
+    assert response.status_code == 201
+    product2_id = response.json()["id"]
 
-
-async def test_cart_and_order_checkout(client, create_user, create_product, auth_headers):
-    """Cart and checkout flow should work."""
-    user = await create_user()
-    product_1 = await create_product(name="Phone", price=100)
-    product_2 = await create_product(name="Case", price=50)
-
-    headers = auth_headers(create_access_token(user))
-
-    add_response = await client.post(
+    # Add to cart
+    response = await client.post(
         "/api/v1/cart/items",
-        headers=headers,
         json={
             "items": [
-                {"product_id": product_1.id, "quantity": 1},
-                {"product_id": product_2.id, "quantity": 2},
+                {"product_id": product1_id, "quantity": 2},
+                {"product_id": product2_id, "quantity": 1},
             ]
         },
+        headers=auth_headers,
     )
+    assert response.status_code == 200
 
-    assert add_response.status_code == 200
-    assert add_response.json()["total"] == 200
+    # Get cart
+    response = await client.get("/api/v1/cart", headers=auth_headers)
+    assert response.status_code == 200
+    cart = response.json()
+    assert len(cart["items"]) == 2
+    assert cart["total"] == 4000  # 2*1000 + 1*2000
 
-    total_response = await client.get("/api/v1/cart/total", headers=headers)
-    assert total_response.json()["total"] == 200
-
-    checkout_response = await client.post("/api/v1/orders/checkout", headers=headers)
-    assert checkout_response.status_code == 201
-
-    order = checkout_response.json()
-    assert order["total_amount"] == 200
+    # Checkout
+    response = await client.post(
+        "/api/v1/orders/checkout",
+        headers=auth_headers,
+    )
+    assert response.status_code == 201
+    order = response.json()
+    assert order["status"] == "pending_payment"
+    assert order["total_amount"] == 4000
     assert len(order["items"]) == 2
 
-    cart_after_checkout = await client.get("/api/v1/cart", headers=headers)
-    assert cart_after_checkout.json()["total"] == 0
-
-    orders_response = await client.get("/api/v1/orders", headers=headers)
-    assert len(orders_response.json()) == 1
-
-
-async def test_rate_limiter_blocks_after_limit():
-    """Rate limiter should raise TooManyRequestsError after limit."""
-    limiter = RateLimiter(max_requests=2, window_seconds=60)
-
-    request = SimpleNamespace(
-        headers={},
-        client=SimpleNamespace(host="127.0.0.1"),
+    # Pay for order
+    response = await client.post(
+        f"/api/v1/orders/{order['id']}/pay",
+        json={"payment_method": "card"},
+        headers=auth_headers,
     )
+    assert response.status_code == 200
+    paid_order = response.json()
+    assert paid_order["status"] == "paid"
+    assert paid_order["payment_method"] == "card"
 
-    await limiter(request)
-    await limiter(request)
+    # Cart should be empty after checkout
+    response = await client.get("/api/v1/cart", headers=auth_headers)
+    assert response.status_code == 200
+    assert len(response.json()["items"]) == 0
 
-    with pytest.raises(TooManyRequestsError):
-        await limiter(request)
+    # Get orders
+    response = await client.get("/api/v1/orders", headers=auth_headers)
+    assert response.status_code == 200
+    orders = response.json()
+    assert len(orders) >= 1

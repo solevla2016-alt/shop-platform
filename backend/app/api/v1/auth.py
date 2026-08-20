@@ -76,7 +76,7 @@ async def register(payload: UserCreate, db: AsyncSession = Depends(get_db)):
         full_name=payload.full_name,
         email=email,
         phone=phone,
-        hashed_password=hash_password(payload.password),
+        password_hash=hash_password(payload.password),
     )
 
     db.add(user)
@@ -105,7 +105,7 @@ async def login(payload: LoginRequest, db: AsyncSession = Depends(get_db)):
         )
     )
 
-    if user is None or not verify_password(payload.password, user.hashed_password):
+    if user is None or not verify_password(payload.password, user.password_hash):
         raise UnauthorizedError()
 
     tokens = await issue_tokens(user, db)

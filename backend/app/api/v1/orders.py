@@ -85,6 +85,11 @@ async def checkout(
     response_model=OrderOut,
     summary="Pay for order",
 )
+@router.post(
+    "/{order_id}/pay",
+    response_model=OrderOut,
+    summary="Pay for order",
+)
 async def pay_order(
     order_id: int,
     payload: PaymentRequest,
@@ -115,11 +120,21 @@ async def pay_order(
     order.paid_at = datetime.now(timezone.utc)
 
     await db.commit()
-    await db.refresh(order)
+
+    order = await db.scalar(
+        select(Order)
+        .options(selectinload(Order.items))
+        .where(Order.id == order_id)
+    )
 
     return order
 
 
+@router.post(
+    "/{order_id}/cancel",
+    response_model=OrderOut,
+    summary="Cancel order",
+)
 @router.post(
     "/{order_id}/cancel",
     response_model=OrderOut,
@@ -149,7 +164,12 @@ async def cancel_order(
     order.status = "cancelled"
 
     await db.commit()
-    await db.refresh(order)
+
+    order = await db.scalar(
+        select(Order)
+        .options(selectinload(Order.items))
+        .where(Order.id == order_id)
+    )
 
     return order
 
