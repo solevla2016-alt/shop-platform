@@ -136,6 +136,7 @@ async function loadMe() {
 }
 
 async function login(identifier, password) {
+  console.log("Попытка входа по адресу:", `${API}/auth/login`);
   const tokens = await apiFetch(
     "/auth/login",
     {
@@ -529,6 +530,22 @@ async function cancelOrder(orderId) {
 // === Forms ===
 
 function bindForms() {
+  // ДОБАВЛЕНО: Переключение вкладок Вход / Регистрация
+  document.querySelectorAll(".auth-tab").forEach((tab) => {
+    tab.addEventListener("click", () => {
+      document.querySelectorAll(".auth-tab").forEach((t) => t.classList.remove("active"));
+      tab.classList.add("active");
+
+      if (tab.dataset.tab === "login") {
+        $("#login-form").classList.remove("hidden");
+        $("#register-form").classList.add("hidden");
+      } else {
+        $("#login-form").classList.add("hidden");
+        $("#register-form").classList.remove("hidden");
+      }
+    });
+  });
+
   $("#login-form").addEventListener("submit", async (e) => {
     e.preventDefault();
     try {
@@ -630,7 +647,6 @@ function bindGlobalActions() {
     }
   });
 
-  // Закрытие модального окна по клику на фон
   document.addEventListener("click", (e) => {
     if (e.target.id === "payment-modal") {
       closePaymentModal();
