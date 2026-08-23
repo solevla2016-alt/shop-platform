@@ -15,7 +15,7 @@ from app.models.product import Product
 from app.models.user import User
 from app.schemas.cart import CartAdd, CartItemOut, CartOut, CartTotalOut
 
-router = APIRouter(prefix="/cart", tags=["Cart"])
+router = APIRouter(tags=["Cart"])
 
 
 async def get_or_create_cart(user_id: int, db: AsyncSession) -> Cart:

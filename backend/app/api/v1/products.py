@@ -20,7 +20,7 @@ from app.schemas.product import (
     ProductUpdate,
 )
 
-router = APIRouter(prefix="/products", tags=["Products"])
+router = APIRouter(tags=["Products"])
 
 
 @dataclass

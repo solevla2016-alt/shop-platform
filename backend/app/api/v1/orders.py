@@ -14,7 +14,7 @@ from app.models.order import Order, OrderItem
 from app.models.user import User
 from app.schemas.order import OrderOut, PaymentRequest
 
-router = APIRouter(prefix="/orders", tags=["Orders"])
+router = APIRouter(tags=["Orders"])
 
 
 @router.post(
