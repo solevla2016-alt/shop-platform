@@ -286,6 +286,7 @@ async def test_get_orders_list(
     data = response.json()
     assert isinstance(data, list)
 
+
 @pytest.mark.asyncio
 async def test_get_products_list(
     client: AsyncClient, auth_headers: dict
@@ -345,6 +346,7 @@ async def test_get_nonexistent_product(client: AsyncClient, auth_headers: dict):
     )
     assert response.status_code == 404  # Not Found
 
+
 @pytest.mark.asyncio
 async def test_update_product(
     client: AsyncClient, admin_headers: dict, test_product
@@ -359,6 +361,7 @@ async def test_update_product(
     data = response.json()
     assert data["name"] == "Updated Name"
     assert data["price"] == 2000
+
 
 @pytest.mark.asyncio
 async def test_add_to_cart(
