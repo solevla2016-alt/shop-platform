@@ -217,3 +217,159 @@ async def test_cart_and_order_checkout(
     assert response.status_code == 200
     orders = response.json()
     assert len(orders) >= 1
+
+
+@pytest.mark.asyncio
+async def test_root_serves_frontend(client: AsyncClient):
+    """Test that the root endpoint serves the frontend index.html."""
+    response = await client.get("/")
+    assert response.status_code == 200
+    assert "text/html" in response.headers.get("content-type", "")
+
+
+@pytest.mark.asyncio
+async def test_unauthorized_access_to_protected_route(client: AsyncClient):
+    """Test that accessing protected routes without token returns 401."""
+    # Пытаемся получить корзину без токена
+    response = await client.get("/api/v1/cart")
+    assert response.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_auth_me_endpoint(
+        client: AsyncClient, regular_user
+):
+    """Test getting current user info."""
+    from app.core.security import create_access_token
+
+    access_token = create_access_token(user=regular_user)
+
+    response = await client.get(
+        "/api/v1/auth/me",
+        headers={"Authorization": f"Bearer {access_token}"},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["email"] == regular_user.email
+    assert data["full_name"] == regular_user.full_name
+
+
+@pytest.mark.asyncio
+async def test_get_me_endpoint(
+        client: AsyncClient, regular_user
+):
+    """Test getting current user info."""
+    from app.core.security import create_access_token
+
+    access_token = create_access_token(user=regular_user)
+
+    response = await client.get(
+        "/api/v1/auth/me",
+        headers={"Authorization": f"Bearer {access_token}"},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["email"] == regular_user.email
+    assert data["full_name"] == regular_user.full_name
+
+
+@pytest.mark.asyncio
+async def test_get_orders_list(
+        client: AsyncClient, auth_headers: dict
+):
+    """Test getting user's orders list."""
+    response = await client.get(
+        "/api/v1/orders",
+        headers=auth_headers,
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert isinstance(data, list)
+
+@pytest.mark.asyncio
+async def test_get_products_list(
+    client: AsyncClient, auth_headers: dict
+):
+    """Test getting products list."""
+    response = await client.get(
+        "/api/v1/products",
+        headers=auth_headers,
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert "items" in data
+    assert "total" in data
+
+
+@pytest.mark.asyncio
+async def test_register_invalid_password(client: AsyncClient):
+    """Test registration with invalid password."""
+    import time
+    timestamp = int(time.time() * 1000)
+
+    response = await client.post(
+        "/api/v1/auth/register",
+        json={
+            "full_name": "Test User",
+            "email": f"test_{timestamp}@example.com",
+            "phone": f"+7999{timestamp % 10000000:07d}",
+            "password": "weak",  # Слишком короткий пароль
+            "password_confirm": "weak",
+        },
+    )
+    assert response.status_code == 422  # Validation error
+
+
+@pytest.mark.asyncio
+async def test_register_duplicate_user(client: AsyncClient, regular_user):
+    """Test registration with existing email."""
+    response = await client.post(
+        "/api/v1/auth/register",
+        json={
+            "full_name": "Test User",
+            "email": regular_user.email,  # Уже существует
+            "phone": "+79991234567",
+            "password": "Password123!",
+            "password_confirm": "Password123!",
+        },
+    )
+    assert response.status_code == 409  # Conflict
+
+
+@pytest.mark.asyncio
+async def test_get_nonexistent_product(client: AsyncClient, auth_headers: dict):
+    """Test getting product that doesn't exist."""
+    response = await client.get(
+        "/api/v1/products/99999",
+        headers=auth_headers,
+    )
+    assert response.status_code == 404  # Not Found
+
+@pytest.mark.asyncio
+async def test_update_product(
+    client: AsyncClient, admin_headers: dict, test_product
+):
+    """Test updating a product."""
+    response = await client.patch(
+        f"/api/v1/products/{test_product.id}",
+        json={"name": "Updated Name", "price": 2000},
+        headers=admin_headers,
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["name"] == "Updated Name"
+    assert data["price"] == 2000
+
+@pytest.mark.asyncio
+async def test_add_to_cart(
+    client: AsyncClient, auth_headers: dict, test_product
+):
+    """Test adding product to cart."""
+    response = await client.post(
+        "/api/v1/cart/items",
+        json={"items": [{"product_id": test_product.id, "quantity": 2}]},
+        headers=auth_headers,
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data["items"]) >= 1

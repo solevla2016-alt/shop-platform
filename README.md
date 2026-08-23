@@ -1,68 +1,87 @@
-# Shop Platform 2.0
+# 🌿 Green Garden E-commerce API
 
-Full-stack e-commerce demo:
+Полноценный backend-сервис для интернет-магазина живых растений, разработанный в соответствии с техническим заданием. Позволяет пользователям регистрироваться, авторизовываться, просматривать каталог товаров, управлять корзиной и оформлять заказы.
 
-- FastAPI
-- PostgreSQL
-- SQLAlchemy async
-- Alembic
-- JWT access + refresh tokens
-- Orders
-- Cart
-- Pagination, filtering, sorting
-- Rate limiting
-- Request logging
-- Static frontend
-- Docker Compose
-- GitHub Actions CI
+##  Технологический стек
 
-## Quick start
+- **Python 3.12** + **FastAPI** (асинхронный веб-фреймворк)
+- **PostgreSQL** (реляционная база данных)
+- **SQLAlchemy 2.0** (асинхронная ORM)
+- **Alembic** (управление миграциями БД)
+- **Pydantic** (валидация данных и сериализация)
+- **JWT** (аутентификация: access + refresh токены)
+- **Docker & Docker Compose** (контейнеризация)
+- **Pytest + pytest-cov** (тестирование с покрытием ≥ 75%)
+- **GitHub Actions** (CI/CD: линтинг flake8 и запуск тестов)
 
-1. Create environment file:
+##  Структура проекта
 
-```bash
-cp .env.example .env
-```
+```text
+shop-platform/
+├── .env.example          # Пример переменных окружения
+├── .github/
+│   └── workflows/        # Конфигурация GitHub Actions (CI/CD)
+├── backend/
+│   ├── alembic/          # Миграции базы данных
+│   ├── app/
+│   │   ├── api/          # Маршруты (endpoints) и зависимости (deps)
+│   │   ├── core/         # Конфигурация, безопасность (JWT, хеширование), исключения
+│   │   ├── db/           # Настройки подключения к БД и базовые модели
+│   │   ├── models/       # SQLAlchemy модели (User, Product, Cart, Order)
+│   │   ├── schemas/      # Pydantic схемы для валидации запросов/ответов
+│   │   ├── scripts/      # Скрипты инициализации (создание админа)
+│   │   └── main.py       # Точка входа приложения FastAPI
+│   ├── frontend/         # Статический SPA-фронтенд (HTML, CSS, JS)
+│   ├── tests/            # Интеграционные и unit-тесты (pytest)
+│   ├── alembic.ini       # Конфигурация Alembic
+│   ├── Dockerfile        # Образ для backend-контейнера
+│   ├── requirements.txt  # Основные зависимости
+│   └── requirements-dev.txt # Зависимости для разработки и тестов
+├── docker-compose.yml    # Оркестрация контейнеров (API + PostgreSQL)
+└── README.md             # Этот файл
 
-2. Build and start:
+    Быстрый старт (Docker)
+Клонируйте репозиторий и перейдите в папку проекта:
+   git clone <your-repo-url>
+   cd shop-platform
+Создайте файл окружения на основе примера:
+   cp .env.example .env
+(Убедитесь, что в .env заданы корректные данные для PostgreSQL и SECRET_KEY)
+Соберите и запустите контейнеры:
+   docker compose up --build
+Откройте в браузере:
+Фронтенд (Магазин): http://localhost:8080
+Swagger Документация API: http://localhost:8080/docs
+ReDoc Документация: http://localhost:8080/redoc
+Данные администратора по умолчанию создаются автоматически при первом запуске (указаны в .env).
 
-```bash
-docker compose up --build
-```
-
-3. Open:
-
-- Frontend: http://localhost:8000
-- Swagger: http://localhost:8000/docs
-- ReDoc: http://localhost:8000/redoc
-- Health: http://localhost:8000/health
-
-Default admin is created from `.env`.
-
-## Local backend development
-
-```bash
-cd backend
-python -m venv venv
-source venv/bin/activate
+    Локальная разработка (без Docker)
+Создайте и активируйте виртуальное окружение:
+   cd backend
+   python -m venv venv
+   source venv/bin/activate  # Для Windows: venv\Scripts\activate
+Установите зависимости:
 pip install -r requirements.txt -r requirements-dev.txt
-alembic upgrade head
-python -m app.scripts.create_admin
+Примените миграции и создайте админа:
+   alembic upgrade head
+   python -m app.scripts.create_admin
+Запустите сервер разработки:
 uvicorn app.main:app --reload
-```
+(Фронтенд будет доступен на http://localhost:8000)
 
-## Tests
-
-```bash
+Тестирование и покрытие кода
+Проект покрыт тестами более чем на 75%. Для запуска тестов и проверки покрытия выполните:
 cd backend
-pytest
-```
-
-## CI
-
-GitHub Actions runs:
-
-```bash
+pytest --cov=app --cov-report=term-missing
+Для проверки качества кода (PEP8):
 flake8 app tests
-pytest
-```
+ Безопасность и валидация
+Пароли: хешируются алгоритмом bcrypt. Требуются: мин. 8 символов, только латиница, минимум 1 заглавная буква, минимум 1 спецсимвол ($, %, &, !, :).
+Телефон: строгая валидация формата (начинается с +7, далее ровно 10 цифр).
+Доступ к API: методы работы с товарами и корзиной защищены JWT-аутентификацией. При отсутствии токена возвращается ошибка 401 Unauthorized.
+
+CI/CD (GitHub Actions)
+При каждом push в репозиторий автоматически запускается пайплайн, который:
+Проверяет код на соответствие PEP8 (flake8).
+Запускает набор тестов (pytest).
+Собирает Docker-образы для проверки корректности сборки.
