@@ -1,6 +1,17 @@
-# 🌿 Green Garden E-commerce API
+# 🌿 Green Garden E-commerce API 
 
-Полноценный backend-сервис для интернет-магазина живых растений, разработанный в соответствии с техническим заданием. Позволяет пользователям регистрироваться, авторизовываться, просматривать каталог товаров, управлять корзиной и оформлять заказы.
+Современная fullstack e-commerce платформа для продажи комнатных растений, садовых цветов и кустарников.
+
+** Демо:** http://111.88.155.227:8080
+
+##  О проекте
+
+**Green Garden** — это полнофункциональный интернет-магазин с:
+- ️ Каталогом товаров с фильтрацией и поиском
+-  Корзиной и оформлением заказов
+-  Личным кабинетом пользователя
+-  Админ-панелью для управления товарами
+-  JWT-аутентификацией и безопасностью
 
 ##  Технологический стек
 
@@ -14,74 +25,202 @@
 - **Pytest + pytest-cov** (тестирование с покрытием ≥ 75%)
 - **GitHub Actions** (CI/CD: линтинг flake8 и запуск тестов)
 
+
+##  Быстрый старт
+
+### Способ 1: Docker (рекомендуется)
+
+**Требования:** Docker и Docker Compose
+
+# 1. Клонируйте репозиторий
+git clone https://github.com/solevla2016-alt/shop-platform.git
+cd shop-platform
+
+# 2. Создайте файл окружения
+cp .env.example .env
+
+# 3. Отредактируйте .env (укажите свои параметры БД и SECRET_KEY)
+
+# 4. Запустите проект
+docker compose up --build
+
+# 5. Откройте в браузере:
+
+**Фронтенд**: http://localhost:8080
+
+**API документация (Swagger)**: http://localhost:8080/docs
+
+###  Способ 2: Локальная разработка
+
+**Требования:** Python 3.12+, PostgreSQL 16
+
+# 1. Клонируйте репозиторий
+git clone https://github.com/solevla2016-alt/shop-platform.git
+cd shop-platform/backend
+
+# 2. Создайте виртуальное окружение
+python -m venv venv
+source venv/bin/activate  # Linux/Mac
+# или
+venv\Scripts\activate  # Windows
+
+# 3. Установите зависимости
+pip install -r requirements.txt -r requirements-dev.txt
+
+# 4. Создайте файл .env (скопируйте из .env.example)
+cp .env.example .env
+
+# 5. Примените миграции
+alembic upgrade head
+
+# 6. Создайте админа (опционально)
+python -m app.scripts.create_admin
+
+# 7. Запустите сервер
+uvicorn app.main:app --reload
+
+**Backend будет доступен на** http://localhost:8000
+
+
+
+
 ##  Структура проекта
 
 ```text
 shop-platform/
-├── .env.example          # Пример переменных окружения
-├── .github/
-│   └── workflows/        # Конфигурация GitHub Actions (CI/CD)
 ├── backend/
-│   ├── alembic/          # Миграции базы данных
-│   ├── app/
-│   │   ├── api/          # Маршруты (endpoints) и зависимости (deps)
-│   │   ├── core/         # Конфигурация, безопасность (JWT, хеширование), исключения
-│   │   ├── db/           # Настройки подключения к БД и базовые модели
-│   │   ├── models/       # SQLAlchemy модели (User, Product, Cart, Order)
-│   │   ├── schemas/      # Pydantic схемы для валидации запросов/ответов
-│   │   ├── scripts/      # Скрипты инициализации (создание админа)
-│   │   └── main.py       # Точка входа приложения FastAPI
-│   ├── frontend/         # Статический SPA-фронтенд (HTML, CSS, JS)
-│   ├── tests/            # Интеграционные и unit-тесты (pytest)
-│   ├── alembic.ini       # Конфигурация Alembic
-│   ├── Dockerfile        # Образ для backend-контейнера
-│   ├── requirements.txt  # Основные зависимости
-│   └── requirements-dev.txt # Зависимости для разработки и тестов
-├── docker-compose.yml    # Оркестрация контейнеров (API + PostgreSQL)
-└── README.md             # Этот файл
+│   ├── app/                    # Основной код приложения
+│   │   ├── api/                # API endpoints
+│   │   │   ├── v1/
+│   │   │   │   ├── auth.py     # Регистрация и авторизация
+│   │   │   │   ├── products.py # Каталог товаров
+│   │   │   │   ├── cart.py     # Корзина
+│   │   │   │   └── orders.py   # Заказы
+│   │   │   ── deps.py         # Зависимости (аутентификация)
+│   │   ├── core/               # Конфигурация и безопасность
+│   │   │   ├── config.py       # Настройки приложения
+│   │   │   ├── security.py     # JWT и хеширование паролей
+│   │   │   └── exceptions.py   # Кастомные исключения
+│   │   ├── db/                 # Подключение к БД
+│   │   ├── models/             # SQLAlchemy модели
+│   │   │   ├── user.py
+│   │   │   ├── product.py
+│   │   │   ├── cart.py
+│   │   │   └── order.py
+│   │   ├── schemas/            # Pydantic схемы для валидации
+│   │   └── main.py             # Точка входа FastAPI
+│   ├── alembic/                # Миграции базы данных
+│   ├── frontend/               # Статический фронтенд (HTML/CSS/JS)
+│   ├── tests/                  # Тесты (pytest)
+│   ├── Dockerfile
+│   ├── requirements.txt
+│   └── alembic.ini
+├── .github/workflows/          # CI/CD пайплайны
+├── docker-compose.yml          # Конфигурация Docker Compose
+├── .env.example                # Пример переменных окружения
+└── README.md                   # Этот файл
+```
 
-    Быстрый старт (Docker)
-Клонируйте репозиторий и перейдите в папку проекта:
-   git clone <your-repo-url>
-   cd shop-platform
-Создайте файл окружения на основе примера:
-   cp .env.example .env
-(Убедитесь, что в .env заданы корректные данные для PostgreSQL и SECRET_KEY)
-Соберите и запустите контейнеры:
-   docker compose up --build
-Откройте в браузере:
-Фронтенд (Магазин): http://localhost:8080
-Swagger Документация API: http://localhost:8080/docs
-ReDoc Документация: http://localhost:8080/redoc
-Данные администратора по умолчанию создаются автоматически при первом запуске (указаны в .env).
+Основной функционал
+Для пользователей:
+✅ Регистрация и авторизация (email/телефон + пароль)
+✅ Просмотр каталога товаров с фильтрацией по категориям
+✅ Поиск товаров по названию и описанию
+✅ Корзина (добавление, удаление, изменение количества)
+✅ Оформление заказа с выбором способа оплаты
+✅ История заказов в личном кабинете
+Для администраторов:
+✅ CRUD товаров (создание, чтение, обновление, удаление)
+✅ Управление статусами заказов
+✅ Просмотр всех заказов системы
+Технические особенности:
+🔐 JWT-аутентификация (access + refresh токены)
+🔒 Хеширование паролей (bcrypt)
+🛡️ Rate limiting на endpoints авторизации
+✅ Покрытие тестами ≥ 75%
+🐳 Docker-контейнеризация
+🔄 CI/CD через GitHub Actions (автоматические тесты и линтинг)
+📱 Адаптивный дизайн (работает на мобильных устройствах)
 
-    Локальная разработка (без Docker)
-Создайте и активируйте виртуальное окружение:
-   cd backend
-   python -m venv venv
-   source venv/bin/activate  # Для Windows: venv\Scripts\activate
-Установите зависимости:
-pip install -r requirements.txt -r requirements-dev.txt
-Примените миграции и создайте админа:
-   alembic upgrade head
-   python -m app.scripts.create_admin
-Запустите сервер разработки:
-uvicorn app.main:app --reload
-(Фронтенд будет доступен на http://localhost:8000)
 
-Тестирование и покрытие кода
-Проект покрыт тестами более чем на 75%. Для запуска тестов и проверки покрытия выполните:
+ Переменные окружения
+Создайте файл .env в корне проекта (скопируйте из .env.example):
+
+# База данных
+POSTGRES_USER=shop
+POSTGRES_PASSWORD=shop_password
+POSTGRES_DB=shop
+POSTGRES_HOST=db
+POSTGRES_PORT=5432
+
+# Безопасность
+SECRET_KEY=your-secret-key-here-min-32-characters
+ACCESS_TOKEN_EXPIRE_MINUTES=60
+REFRESH_TOKEN_EXPIRE_DAYS=14
+
+# Rate limiting
+RATE_LIMIT_AUTH_REQUESTS=10000
+RATE_LIMIT_AUTH_WINDOW_SECONDS=60
+
+# Админ по умолчанию
+ADMIN_EMAIL=admin@example.com
+ADMIN_PHONE=+79990000000
+ADMIN_PASSWORD=AdminPass123!
+ADMIN_FULL_NAME=Admin Admin
+
+Тестирование
+
 cd backend
-pytest --cov=app --cov-report=term-missing
-Для проверки качества кода (PEP8):
-flake8 app tests
- Безопасность и валидация
-Пароли: хешируются алгоритмом bcrypt. Требуются: мин. 8 символов, только латиница, минимум 1 заглавная буква, минимум 1 спецсимвол ($, %, &, !, :).
-Телефон: строгая валидация формата (начинается с +7, далее ровно 10 цифр).
-Доступ к API: методы работы с товарами и корзиной защищены JWT-аутентификацией. При отсутствии токена возвращается ошибка 401 Unauthorized.
 
-CI/CD (GitHub Actions)
-При каждом push в репозиторий автоматически запускается пайплайн, который:
-Проверяет код на соответствие PEP8 (flake8).
-Запускает набор тестов (pytest).
-Собирает Docker-образы для проверки корректности сборки.
+# Запуск всех тестов
+pytest
+
+# Запуск с отчётом о покрытии
+pytest --cov=app --cov-report=term-missing
+
+# Запуск с HTML-отчётом
+pytest --cov=app --cov-report=html
+
+Требование ТЗ: покрытие тестами ≥ 75% ✅
+
+# API Документация
+После запуска проекта откройте:
+Swagger UI: http://localhost:8080/docs
+ReDoc: http://localhost:8080/redoc
+
+# Основные endpoints:
+
+ **Метод** **Путь** **Описание** 
+
+**POST**   **/api/v1/auth/register** **Регистрация пользователя**
+
+**POST**   **/api/v1/auth/login**      **Авторизация**
+
+**GET**    **/api/v1/products**        **Список товаров**
+
+**POST**   **/api/v1/cart/items**      **Добавить в корзину**
+
+**GET**    **/api/v1/cart**            **Получить корзину**
+
+**POST**  **/api/v1/orders**          **Оформить заказ**
+
+#  Production-деплой
+
+Проект развёрнут на Яндекс Облаке:
+
+URL: http://111.88.155.227:8080
+
+# Демо-доступ:
+
+Email: admin@example.com
+
+Пароль: AdminPass$
+
+# Автор
+
+[Ольга Стасенко]
+
+GitHub: @solevla2016-alt
+
+Email: [solevla2016@gmail.com] 
+

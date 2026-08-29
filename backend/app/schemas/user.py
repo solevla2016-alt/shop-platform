@@ -3,7 +3,14 @@
 import re
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    EmailStr,
+    Field,
+    field_validator,
+    model_validator,
+)
 
 PHONE_REGEX = re.compile(r"^\+7\d{10}$")
 PASSWORD_REGEX = re.compile(r"^[A-Za-z0-9$%&!:]{8,}$")

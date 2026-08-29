@@ -4,6 +4,7 @@ from sqlalchemy import DateTime, ForeignKey, Integer, String, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
+from app.models.product import Product
 
 
 class Order(Base):
@@ -62,3 +63,5 @@ class OrderItem(Base):
     subtotal: Mapped[int] = mapped_column(Integer, nullable=False)
 
     order: Mapped["Order"] = relationship("Order", back_populates="items")
+
+    product: Mapped["Product"] = relationship("Product", back_populates="order_items")

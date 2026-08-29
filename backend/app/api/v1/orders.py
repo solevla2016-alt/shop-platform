@@ -1,5 +1,4 @@
 from datetime import datetime, timezone
-from typing import List
 
 from fastapi import APIRouter, Depends, status
 from sqlalchemy import delete, select
@@ -38,7 +37,7 @@ async def checkout(
         raise BadRequestError("Cart is empty")
 
     total_amount = 0
-    order_items: List[OrderItem] = []
+    order_items: list[OrderItem] = []
 
     for cart_item in cart.items:
         product = cart_item.product
@@ -176,7 +175,7 @@ async def cancel_order(
 
 @router.get(
     "",
-    response_model=List[OrderOut],
+    response_model=list[OrderOut],
     summary="List user orders",
 )
 async def list_orders(

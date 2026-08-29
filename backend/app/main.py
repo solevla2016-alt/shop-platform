@@ -1,37 +1,87 @@
-import os
-from fastapi import FastAPI, Request
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse
-from fastapi.staticfiles import StaticFiles
+import logging
+from contextlib import asynccontextmanager
 
-from app.api.v1 import auth, products, cart, orders
+from fastapi import Depends, FastAPI, Request
+from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
+from fastapi.responses import JSONResponse
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession
+from starlette.exceptions import HTTPException as StarletteHTTPException
+
+from app.api.v1 import auth, cart, categories, orders, products
+from app.core.config import settings
 from app.core.exceptions import (
     BadRequestError,
-    UnauthorizedError,
+    ConflictError,
     ForbiddenError,
     NotFoundError,
-    ConflictError,
     TooManyRequestsError,
+    UnauthorizedError,
 )
+from app.db.session import get_db
 
-# 1. Инициализация приложения
+# Инициализация собственного логгера (исправляет LOG015)
+logger = logging.getLogger(__name__)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup
+    logger.info("Starting up application...")
+    yield
+    # Shutdown
+    logger.info("Shutting down application...")
+
+
 app = FastAPI(
-    title="Green Garden API",
-    description="API для магазина живых растений",
+    title=settings.app_name,
+    description="API для магазина живых растений",  # Исправлена кодировка (были кракозябры)
     version="1.0.0",
+    lifespan=lifespan,
 )
 
-# 2. Настройка CORS
+# --- Middleware ---
+
+# Исправлен CORS: нельзя использовать allow_origins=["*"] вместе с allow_credentials=True
+# Используем настройки из config или безопасный fallback для локальной разработки
+allowed_origins = getattr(settings, "allowed_origins", ["http://localhost:3000", "http://localhost:5173"])
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=allowed_origins,
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
     allow_headers=["*"],
 )
 
+# Сжатие ответов для уменьшения трафика
+app.add_middleware(GZipMiddleware, minimum_size=1000)
 
-# 3. Обработчики кастомных исключений (превращаем Python-ошибки в HTTP JSON)
+
+# --- Обработчики исключений ---
+
+@app.exception_handler(StarletteHTTPException)
+async def http_exception_handler(request: Request, exc: StarletteHTTPException):
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"code": exc.status_code, "message": str(exc.detail)},
+    )
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    return JSONResponse(
+        status_code=422,
+        content={
+            "code": 422,
+            "message": "Ошибка валидации данных",
+            "details": exc.errors(),
+        },
+    )
+
+
 @app.exception_handler(UnauthorizedError)
 async def unauthorized_handler(request: Request, exc: UnauthorizedError):
     return JSONResponse(status_code=401, content={"code": 401, "message": str(exc)})
@@ -61,20 +111,36 @@ async def forbidden_handler(request: Request, exc: ForbiddenError):
 async def too_many_requests_handler(request: Request, exc: TooManyRequestsError):
     return JSONResponse(status_code=429, content={"code": 429, "message": str(exc)})
 
-# 4. Подключение роутеров
-app.include_router(auth.router, prefix="/api/v1/auth", tags=["auth"])
-app.include_router(products.router, prefix="/api/v1/products", tags=["products"])
-app.include_router(cart.router, prefix="/api/v1/cart", tags=["cart"])
-app.include_router(orders.router, prefix="/api/v1/orders", tags=["orders"])
 
-# 5. Раздача статики фронтенда
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-FRONTEND_DIR = os.path.join(BASE_DIR, "frontend")
+@app.exception_handler(Exception)
+async def general_exception_handler(request: Request, exc: Exception):
+    # Исправлено LOG014: передаем сам объект исключения в exc_info
+    logger.error(f"Unhandled exception: {exc}", exc_info=exc)
+    return JSONResponse(
+        status_code=500,
+        content={"code": 500, "message": "Внутренняя ошибка сервера"},
+    )
 
-if os.path.exists(FRONTEND_DIR):
-    app.mount("/css", StaticFiles(directory=os.path.join(FRONTEND_DIR, "css")), name="css")
-    app.mount("/js", StaticFiles(directory=os.path.join(FRONTEND_DIR, "js")), name="js")
 
-    @app.get("/")
-    async def serve_frontend():
-        return FileResponse(os.path.join(FRONTEND_DIR, "index.html"))
+# --- Роутеры ---
+
+app.include_router(auth.router, prefix=f"{settings.api_v1_prefix}/auth")
+app.include_router(products.router, prefix=f"{settings.api_v1_prefix}/products")
+app.include_router(cart.router, prefix=f"{settings.api_v1_prefix}/cart")
+app.include_router(orders.router, prefix=f"{settings.api_v1_prefix}/orders")
+app.include_router(categories.router, prefix=f"{settings.api_v1_prefix}/categories")
+
+
+# --- Эндпоинты ---
+
+@app.get("/health")
+async def health_check(db: AsyncSession = Depends(get_db)):  # noqa: B008
+    """Проверка работоспособности приложения и подключения к БД."""
+    try:
+        await db.execute(text("SELECT 1"))
+        return {"status": "ok", "database": "connected"}
+    except Exception as e:  # noqa: BLE001 (перехват Exception здесь оправдан для health-check)
+        return JSONResponse(
+            status_code=503,
+            content={"status": "error", "database": "disconnected", "error": str(e)},
+        )

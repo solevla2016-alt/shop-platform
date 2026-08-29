@@ -1,6 +1,5 @@
 """Cart schemas."""
 
-from typing import List
 
 from pydantic import BaseModel, Field
 
@@ -15,7 +14,7 @@ class CartItemAdd(BaseModel):
 class CartAdd(BaseModel):
     """Add one or multiple products to cart."""
 
-    items: List[CartItemAdd] = Field(min_length=1)
+    items: list[CartItemAdd] = Field(min_length=1)
 
 
 class CartItemOut(BaseModel):
@@ -31,7 +30,7 @@ class CartItemOut(BaseModel):
 class CartOut(BaseModel):
     """Cart response."""
 
-    items: List[CartItemOut]
+    items: list[CartItemOut]
     total: int
 
 

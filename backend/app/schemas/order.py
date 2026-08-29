@@ -1,5 +1,4 @@
 from datetime import datetime
-from typing import List, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -19,12 +18,12 @@ class OrderOut(BaseModel):
 
     id: int
     status: str
-    payment_method: Optional[str] = None
+    payment_method: str | None = None
     total_amount: int
-    paid_at: Optional[datetime] = None
+    paid_at: datetime | None = None
     created_at: datetime
     updated_at: datetime
-    items: List[OrderItemOut]
+    items: list[OrderItemOut]
 
 
 class PaymentRequest(BaseModel):

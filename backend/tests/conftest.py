@@ -1,12 +1,6 @@
 import os
 import time
 
-os.environ.setdefault("SECRET_KEY", "test-secret-key-for-testing-only")
-os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite:///./test.db")
-os.environ.setdefault("ACCESS_TOKEN_EXPIRE_MINUTES", "60")
-os.environ.setdefault("RATE_LIMIT_AUTH_REQUESTS", "10000")
-os.environ.setdefault("LOG_LEVEL", "WARNING")
-
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
@@ -18,6 +12,12 @@ from app.db.session import get_db
 from app.main import app
 from app.models.product import Product
 from app.models.user import User
+
+os.environ.setdefault("SECRET_KEY", "test-secret-key-for-testing-only")
+os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite:///./test.db")
+os.environ.setdefault("ACCESS_TOKEN_EXPIRE_MINUTES", "60")
+os.environ.setdefault("RATE_LIMIT_AUTH_REQUESTS", "10000")
+os.environ.setdefault("LOG_LEVEL", "WARNING")
 
 
 @pytest_asyncio.fixture(scope="session")
