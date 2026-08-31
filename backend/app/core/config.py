@@ -1,5 +1,8 @@
 """Application configuration."""
+import os
 from functools import lru_cache
+from pathlib import Path
+
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -46,8 +49,37 @@ class Settings(BaseSettings):
     def normalize_frontend_url(cls, value: str) -> str:
         return value.rstrip("/")
 
+    upload_dir: str = "uploads"
+    max_upload_size_mb: int = Field(default=10, ge=1)
+
+    @property
+    def uploads_path(self) -> Path:
+        return Path(os.path.abspath(self.upload_dir))
+
+    @property
+    def categories_upload_dir(self) -> Path:
+        return self.uploads_path / "categories"
+
+    @property
+    def products_upload_dir(self) -> Path:
+        return self.uploads_path / "products"
+
+    def ensure_upload_dirs(self) -> None:
+        """Create upload directories if they don't exist."""
+        for path in (
+            self.categories_upload_dir,
+            self.products_upload_dir,
+        ):
+            path.mkdir(parents=True, exist_ok=True)
+
+    @property
+    def max_upload_size_bytes(self) -> int:
+        return self.max_upload_size_mb * 1024 * 1024
+
+
 @lru_cache
 def get_settings() -> Settings:
     return Settings()
+
 
 settings = get_settings()

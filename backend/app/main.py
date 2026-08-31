@@ -13,7 +13,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from app.api.v1 import auth, products, cart, orders, categories
+from app.api.v1 import auth, products, cart, orders, categories, uploads
 from app.core.config import settings
 from app.core.exceptions import (
     BadRequestError,
@@ -42,6 +42,7 @@ FRONTEND_DIR = os.path.abspath(
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Starting up...")
+    settings.ensure_upload_dirs()
     yield
     logger.info("Shutting down...")
 
@@ -61,6 +62,7 @@ app = FastAPI(
 if os.path.exists(FRONTEND_DIR):
     js_dir = os.path.join(FRONTEND_DIR, "js")
     css_dir = os.path.join(FRONTEND_DIR, "css")
+    images_dir = os.path.join(FRONTEND_DIR, "images")
 
     if os.path.exists(js_dir):
         app.mount(
@@ -75,6 +77,25 @@ if os.path.exists(FRONTEND_DIR):
             StaticFiles(directory=css_dir),
             name="css",
         )
+
+    if os.path.exists(images_dir):
+        app.mount(
+            "/images",
+            StaticFiles(directory=images_dir),
+            name="images",
+        )
+
+
+# Загруженные изображения раздаются по /uploads отдельно:
+# локально — напрямую из FastAPI, в Docker — через nginx.
+settings.ensure_upload_dirs()
+
+if os.path.exists(settings.uploads_path):
+    app.mount(
+        "/uploads",
+        StaticFiles(directory=settings.uploads_path),
+        name="uploads",
+    )
 
 
 @app.get("/")
@@ -293,6 +314,11 @@ app.include_router(
 app.include_router(
     categories.router,
     prefix=f"{settings.api_v1_prefix}/categories",
+)
+
+app.include_router(
+    uploads.router,
+    prefix=f"{settings.api_v1_prefix}/uploads",
 )
 
 

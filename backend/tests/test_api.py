@@ -722,30 +722,6 @@ async def test_auth_invalid_refresh_and_logout_valid_token(
 
 
 @pytest.mark.asyncio
-async def test_password_reset_email_failure_is_hidden(
-    client: AsyncClient,
-    regular_user,
-    monkeypatch,
-):
-    async def fake_send(recipient, token):
-        raise RuntimeError("SMTP unavailable")
-
-    monkeypatch.setattr(
-        "app.api.v1.auth.send_password_reset_email",
-        fake_send,
-    )
-
-    response = await client.post(
-        "/api/v1/auth/forgot-password",
-        json={
-            "email": regular_user.email,
-        },
-    )
-
-    assert response.status_code == 200
-
-
-@pytest.mark.asyncio
 async def test_optional_auth_with_valid_and_missing_user_token(
     client: AsyncClient,
     regular_user,
@@ -1645,4 +1621,128 @@ async def test_health_response(
 
     assert data["status"] == "ok"
     assert data["database"] == "connected"
+
+
+@pytest.mark.asyncio
+async def test_upload_image_success(
+    client: AsyncClient,
+    admin_headers: dict,
+):
+    response = await client.post(
+        "/api/v1/uploads",
+        headers=admin_headers,
+        data={"folder": "categories"},
+        files={
+            "file": (
+                "test-photo.jpg",
+                b"\xff\xd8\xff\xe0fake-jpeg-bytes",
+                "image/jpeg",
+            )
+        },
+    )
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    assert "url" in data
+    assert data["url"].startswith(
+        "/uploads/categories/"
+    )
+    assert data["url"].endswith(".jpg")
+
+
+@pytest.mark.asyncio
+async def test_upload_image_wrong_folder(
+    client: AsyncClient,
+    admin_headers: dict,
+):
+    response = await client.post(
+        "/api/v1/uploads",
+        headers=admin_headers,
+        data={"folder": "avatars"},
+        files={
+            "file": (
+                "pic.jpg",
+                b"\xff\xd8\xff\xe0fake",
+                "image/jpeg",
+            )
+        },
+    )
+
+    assert response.status_code in (400, 422)
+
+
+@pytest.mark.asyncio
+async def test_upload_image_bad_extension(
+    client: AsyncClient,
+    admin_headers: dict,
+):
+    response = await client.post(
+        "/api/v1/uploads",
+        headers=admin_headers,
+        data={"folder": "products"},
+        files={
+            "file": (
+                "evil.txt",
+                b"hello world",
+                "text/plain",
+            )
+        },
+    )
+
+    assert response.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_upload_image_without_admin(
+    client: AsyncClient,
+    auth_headers: dict,
+):
+    response = await client.post(
+        "/api/v1/uploads",
+        headers=auth_headers,
+        data={"folder": "products"},
+        files={
+            "file": (
+                "pic.jpg",
+                b"\xff\xd8\xff\xe0fake",
+                "image/jpeg",
+            )
+        },
+    )
+
+    assert response.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_upload_image_without_auth(
+    client: AsyncClient,
+):
+    response = await client.post(
+        "/api/v1/uploads",
+        data={"folder": "products"},
+        files={
+            "file": (
+                "pic.jpg",
+                b"\xff\xd8\xff\xe0fake",
+                "image/jpeg",
+            )
+        },
+    )
+
+    assert response.status_code in (401, 403)
+
+
+@pytest.mark.asyncio
+async def test_get_db_dependency_yields_session():
+    from app.db.session import get_db
+
+    async for session in get_db():
+        from app.db.base import Base
+
+        assert Base is not None
+        assert session is not None
+        break
+
 

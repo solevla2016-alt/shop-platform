@@ -29,11 +29,7 @@ CATEGORIES = [
             "Филодендроны, монстеры, фикусы и другие"
         ),
         "icon": "",
-        "image_url": (
-            "https://images.unsplash.com/"
-            "photo-1614594965117-6c2bd6b537d8"
-            "?w=400&h=300&fit=crop"
-        ),
+        "image_url": "/images/categories/indoor.jpg",
     },
     {
         "name": "Садовые цветы",
@@ -42,11 +38,7 @@ CATEGORIES = [
             "Розы, пионы, гортензии и сезонные цветы"
         ),
         "icon": "🌸",
-        "image_url": (
-            "https://images.unsplash.com/"
-            "photo-1490750967868-88aa4486c946"
-            "?w=400&h=300&fit=crop"
-        ),
+        "image_url": "/images/categories/flowering.jpg",
     },
     {
         "name": "Кустарники",
@@ -56,11 +48,7 @@ CATEGORIES = [
             "и живой изгороди"
         ),
         "icon": "🌳",
-        "image_url": (
-            "https://images.unsplash.com/"
-            "photo-1466692476868-aef1dfb1e735"
-            "?w=400&h=300&fit=crop"
-        ),
+        "image_url": None,
     },
     {
         "name": "Деревья",
@@ -70,11 +58,7 @@ CATEGORIES = [
             "для участка"
         ),
         "icon": "🌲",
-        "image_url": (
-            "https://images.unsplash.com/"
-            "photo-1542273917363-3b1817f69a2d"
-            "?w=400&h=300&fit=crop"
-        ),
+        "image_url": None,
     },
     {
         "name": "Суккуленты",
@@ -84,9 +68,7 @@ CATEGORIES = [
         ),
         "icon": "🌵",
         "image_url": (
-            "https://images.unsplash.com/"
-            "photo-1459411621453-7b03977f4bfc"
-            "?w=400&h=300&fit=crop"
+            "/images/categories/succulents.jpg"
         ),
     },
     {
@@ -96,11 +78,7 @@ CATEGORIES = [
             "Аксессуары, удобрения, горшки и прочее"
         ),
         "icon": "🌿",
-        "image_url": (
-            "https://images.unsplash.com/"
-            "photo-1463936575829-25148e12107a"
-            "?w=400&h=300&fit=crop"
-        ),
+        "image_url": None,
     },
 ]
 
