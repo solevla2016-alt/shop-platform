@@ -1,21 +1,18 @@
+"""Order schemas."""
 from datetime import datetime
-
+from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
-
 
 class OrderItemOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
-
     product_id: int
     product_name: str
     price: int
     quantity: int
     subtotal: int
 
-
 class OrderOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
-
     id: int
     status: str
     payment_method: str | None = None
@@ -25,6 +22,8 @@ class OrderOut(BaseModel):
     updated_at: datetime
     items: list[OrderItemOut]
 
-
 class PaymentRequest(BaseModel):
-    payment_method: str = Field(..., description="card, sbp, or cash")
+    payment_method: Literal["card", "sbp", "cash"]
+
+class OrderStatusUpdate(BaseModel):
+    status: Literal["pending_payment", "paid", "cancelled"]

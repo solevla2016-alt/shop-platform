@@ -129,16 +129,13 @@ async def add_cart_items(
             )
         )
 
+        new_quantity = (existing_item.quantity + quantity) if existing_item else quantity
+        if new_quantity > 1000:
+            raise BadRequestError("Количество одного товара не может превышать 1000")
         if existing_item:
-            existing_item.quantity += quantity
+            existing_item.quantity = new_quantity
         else:
-            db.add(
-                CartItem(
-                    cart_id=cart.id,
-                    product_id=product_id,
-                    quantity=quantity,
-                )
-            )
+            db.add(CartItem(cart_id=cart.id, product_id=product_id, quantity=quantity))
 
     await db.commit()
 

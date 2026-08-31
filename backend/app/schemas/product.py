@@ -1,63 +1,51 @@
+"""Product schemas."""
 from datetime import datetime
-from enum import Enum
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from pydantic import BaseModel, ConfigDict, Field
+class ProductBase(BaseModel):
+    name: str = Field(min_length=1, max_length=255)
+    description: str | None = Field(default=None, max_length=5000)
+    image_url: str | None = Field(default=None, max_length=500)
+    price: int = Field(gt=0)
+    is_active: bool = True
+    category_id: int = Field(gt=0)
+    sku: str = Field(min_length=1, max_length=50)
+    size: str | None = Field(default=None, max_length=50)
 
+    @field_validator("name", "sku", "size", mode="before")
+    @classmethod
+    def strip_strings(cls, value):
+        return value.strip() if isinstance(value, str) else value
 
-class ProductCategory(str, Enum):
-    INDOOR = "indoor"
-    GARDEN = "garden"
-    SHRUB = "shrub"
-    TREE = "tree"
-    SUCCULENT = "succulent"
-    OTHER = "other"
-
-
-class ProductCreate(BaseModel):
-    name: str = Field(..., min_length=1, max_length=255)
-    description: str | None = None
-    image_url: str | None = Field(None, max_length=500)
-    price: int = Field(..., gt=0, description="Цена в копейках/центах")
-    is_active: bool = Field(default=True)
-    category: ProductCategory = ProductCategory.OTHER
-    sku: str = Field(..., min_length=1, max_length=50, pattern=r'^[A-Z0-9\-]+$')
-    size: str | None = Field(None, max_length=50)
-
+class ProductCreate(ProductBase):
+    pass
 
 class ProductUpdate(BaseModel):
-    name: str | None = Field(None, min_length=1, max_length=255)
-    description: str | None = None
-    image_url: str | None = Field(None, max_length=500)
-    price: int | None = Field(None, gt=0)
+    name: str | None = Field(default=None, min_length=1, max_length=255)
+    description: str | None = Field(default=None, max_length=5000)
+    image_url: str | None = Field(default=None, max_length=500)
+    price: int | None = Field(default=None, gt=0)
     is_active: bool | None = None
-    category: ProductCategory | None = None
-    sku: str | None = Field(None, min_length=1, max_length=50, pattern=r'^[A-Z0-9\-]+$')
-    size: str | None = Field(None, max_length=50)
+    category_id: int | None = Field(default=None, gt=0)
+    sku: str | None = Field(default=None, min_length=1, max_length=50)
+    size: str | None = Field(default=None, max_length=50)
 
+    @field_validator("name", "sku", "size", mode="before")
+    @classmethod
+    def strip_strings(cls, value):
+        return value.strip() if isinstance(value, str) else value
 
-class ProductResponse(BaseModel):
+class ProductResponse(ProductBase):
+    model_config = ConfigDict(from_attributes=True)
     id: int
-    name: str
-    description: str | None
-    image_url: str | None
-    price: int
-    is_active: bool
-    category: ProductCategory
-    sku: str
-    size: str | None
     created_at: datetime
     updated_at: datetime
 
-    model_config = ConfigDict(from_attributes=True)
-
-
-# Алиас для обратной совместимости
 ProductOut = ProductResponse
-
 
 class PaginatedProducts(BaseModel):
     items: list[ProductResponse]
     total: int
-    page: int = Field(..., ge=1)
-    size: int = Field(..., ge=1, le=100)
-    pages: int = Field(..., ge=0)
+    page: int
+    size: int
+    pages: int

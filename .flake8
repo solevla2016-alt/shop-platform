@@ -1,0 +1,32 @@
+[flake8]
+# Максимальная длина строки
+max-line-length = 120
+
+# Папки и файлы, которые flake8 должен игнорировать
+exclude =
+    .venv,
+    venv,
+    .env,
+    __pycache__,
+    .git,
+    .pytest_cache,
+    *.egg-info,
+    .mypy_cache,
+    .ruff_cache
+
+# Правила, которые мы игнорируем глобально
+ignore =
+    E203,
+    W503,
+    B008,
+    BLE001
+
+# Специальные правила для конкретных файлов
+per-file-ignores =
+    # Тесты: разрешаем импорты не в начале файла (нужно для sys.path)
+    */tests/conftest.py: E402
+    */tests/*.py: E402
+    # Миграции Alembic: разрешаем длинные строки и форматирование
+    */alembic/versions/*.py: E402, E501, W292, E128, E122
+    # Скрипты с данными: разрешаем длинные строки
+    */scripts/*.py: E501

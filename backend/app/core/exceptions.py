@@ -9,8 +9,7 @@ class AppError(Exception):
 
     def __init__(self, message: str | None = None):
         """Override default message if provided."""
-        if message is not None:
-            self.message = message
+        self.message = message or self.__class__.message
         super().__init__(self.message)
 
 

@@ -19,10 +19,10 @@ jobs:
       run:
         working-directory: backend
     env:
-      SECRET_KEY: ci-test-secret-key
+      SECRET_KEY: ci-test-secret-key-that-is-at-least-32-characters-long
       DATABASE_URL: sqlite+aiosqlite:///./test.db
       ACCESS_TOKEN_EXPIRE_MINUTES: 60
-      RATE_LIMIT_AUTH_REQUESTS: 10000
+      RATE_LIMIT_AUTH_REQUESTS: 10
       LOG_LEVEL: WARNING
     steps:
       - name: Checkout code

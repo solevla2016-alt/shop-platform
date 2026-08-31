@@ -1,226 +1,206 @@
-# 🌿 Green Garden E-commerce API 
+# 🌿 Green Garden — e-commerce platform
 
-Современная fullstack e-commerce платформа для продажи комнатных растений, садовых цветов и кустарников.
+Fullstack интернет-магазин растений на **FastAPI + PostgreSQL + SQLAlchemy + Alembic + vanilla JavaScript + Nginx + Docker Compose**.
 
-** Демо:** http://111.88.155.227:8080
+Проект подготовлен как коммерчески распространяемый шаблон: секреты не хранятся в репозитории, база создаётся миграциями, категории автоматически заполняются, есть JWT access/refresh, корзина, заказы, админское управление товарами и заказами, восстановление пароля через Resend.
 
-##  О проекте
+## Возможности
 
-**Green Garden** — это полнофункциональный интернет-магазин с:
-- ️ Каталогом товаров с фильтрацией и поиском
--  Корзиной и оформлением заказов
--  Личным кабинетом пользователя
--  Админ-панелью для управления товарами
--  JWT-аутентификацией и безопасностью
+### Покупатель
+- регистрация по email и телефону;
+- вход по email или телефону;
+- JWT access + refresh tokens с ротацией refresh token;
+- каталог с поиском, фильтрами, сортировкой и пагинацией;
+- корзина;
+- оформление заказа;
+- демонстрационная оплата: карта / СБП / наличные;
+- история заказов;
+- отмена неоплаченного заказа;
+- восстановление пароля по email.
 
-##  Технологический стек
+### Администратор
+- создание, изменение и soft-delete товаров;
+- управление категориями через API;
+- просмотр всех заказов через API;
+- изменение статуса заказа;
+- просмотр неактивных товаров.
 
-- **Python 3.12** + **FastAPI** (асинхронный веб-фреймворк)
-- **PostgreSQL** (реляционная база данных)
-- **SQLAlchemy 2.0** (асинхронная ORM)
-- **Alembic** (управление миграциями БД)
-- **Pydantic** (валидация данных и сериализация)
-- **JWT** (аутентификация: access + refresh токены)
-- **Docker & Docker Compose** (контейнеризация)
-- **Pytest + pytest-cov** (тестирование с покрытием ≥ 75%)
-- **GitHub Actions** (CI/CD: линтинг flake8 и запуск тестов)
+## Важное ограничение
 
+Оплата в текущей версии **демонстрационная**. Реального эквайринга и списания денег нет. Перед запуском реального магазина необходимо подключить платёжного провайдера, настроить юридические документы, доставку, налоги и production-инфраструктуру.
 
-##  Быстрый старт
+## Стек
 
-### Способ 1: Docker (рекомендуется)
+- Python 3.12+
+- FastAPI
+- SQLAlchemy 2.x async
+- PostgreSQL 16
+- Alembic
+- Pydantic v2
+- PyJWT
+- bcrypt
+- Resend HTTP API
+- Nginx
+- Docker Compose
+- Pytest / pytest-cov / flake8
+- GitHub Actions
 
-**Требования:** Docker и Docker Compose
+## Быстрый запуск через Docker
 
-# 1. Клонируйте репозиторий
-git clone https://github.com/solevla2016-alt/shop-platform.git
+Требуются Docker и Docker Compose.
+
+```bash
+git clone <your-repository>
 cd shop-platform
-
-# 2. Создайте файл окружения
 cp .env.example .env
-
-# 3. Отредактируйте .env (укажите свои параметры БД и SECRET_KEY)
-
-# 4. Запустите проект
-docker compose up --build
-
-# 5. Откройте в браузере:
-
-**Фронтенд**: http://localhost:8080
-
-**API документация (Swagger)**: http://localhost:8080/docs
-
-###  Способ 2: Локальная разработка
-
-**Требования:** Python 3.12+, PostgreSQL 16
-
-# 1. Клонируйте репозиторий
-git clone https://github.com/solevla2016-alt/shop-platform.git
-cd shop-platform/backend
-
-# 2. Создайте виртуальное окружение
-python -m venv venv
-source venv/bin/activate  # Linux/Mac
-# или
-venv\Scripts\activate  # Windows
-
-# 3. Установите зависимости
-pip install -r requirements.txt -r requirements-dev.txt
-
-# 4. Создайте файл .env (скопируйте из .env.example)
-cp .env.example .env
-
-# 5. Примените миграции
-alembic upgrade head
-
-# 6. Создайте админа (опционально)
-python -m app.scripts.create_admin
-
-# 7. Запустите сервер
-uvicorn app.main:app --reload
-
-**Backend будет доступен на** http://localhost:8000
-
-
-
-
-##  Структура проекта
-
-```text
-shop-platform/
-├── backend/
-│   ├── app/                    # Основной код приложения
-│   │   ├── api/                # API endpoints
-│   │   │   ├── v1/
-│   │   │   │   ├── auth.py     # Регистрация и авторизация
-│   │   │   │   ├── products.py # Каталог товаров
-│   │   │   │   ├── cart.py     # Корзина
-│   │   │   │   └── orders.py   # Заказы
-│   │   │   ── deps.py         # Зависимости (аутентификация)
-│   │   ├── core/               # Конфигурация и безопасность
-│   │   │   ├── config.py       # Настройки приложения
-│   │   │   ├── security.py     # JWT и хеширование паролей
-│   │   │   └── exceptions.py   # Кастомные исключения
-│   │   ├── db/                 # Подключение к БД
-│   │   ├── models/             # SQLAlchemy модели
-│   │   │   ├── user.py
-│   │   │   ├── product.py
-│   │   │   ├── cart.py
-│   │   │   └── order.py
-│   │   ├── schemas/            # Pydantic схемы для валидации
-│   │   └── main.py             # Точка входа FastAPI
-│   ├── alembic/                # Миграции базы данных
-│   ├── frontend/               # Статический фронтенд (HTML/CSS/JS)
-│   ├── tests/                  # Тесты (pytest)
-│   ├── Dockerfile
-│   ├── requirements.txt
-│   └── alembic.ini
-├── .github/workflows/          # CI/CD пайплайны
-├── docker-compose.yml          # Конфигурация Docker Compose
-├── .env.example                # Пример переменных окружения
-└── README.md                   # Этот файл
 ```
 
-Основной функционал
-Для пользователей:
-✅ Регистрация и авторизация (email/телефон + пароль)
-✅ Просмотр каталога товаров с фильтрацией по категориям
-✅ Поиск товаров по названию и описанию
-✅ Корзина (добавление, удаление, изменение количества)
-✅ Оформление заказа с выбором способа оплаты
-✅ История заказов в личном кабинете
-Для администраторов:
-✅ CRUD товаров (создание, чтение, обновление, удаление)
-✅ Управление статусами заказов
-✅ Просмотр всех заказов системы
-Технические особенности:
-🔐 JWT-аутентификация (access + refresh токены)
-🔒 Хеширование паролей (bcrypt)
-🛡️ Rate limiting на endpoints авторизации
-✅ Покрытие тестами ≥ 75%
-🐳 Docker-контейнеризация
-🔄 CI/CD через GitHub Actions (автоматические тесты и линтинг)
-📱 Адаптивный дизайн (работает на мобильных устройствах)
+В `.env` обязательно задайте собственный `SECRET_KEY`, пароль PostgreSQL и production-параметры.
 
+Запуск:
 
- Переменные окружения
-Создайте файл .env в корне проекта (скопируйте из .env.example):
+```bash
+docker compose up --build -d
+```
 
-# База данных
-POSTGRES_USER=shop
-POSTGRES_PASSWORD=shop_password
-POSTGRES_DB=shop
-POSTGRES_HOST=db
-POSTGRES_PORT=5432
+После запуска:
 
-# Безопасность
-SECRET_KEY=your-secret-key-here-min-32-characters
-ACCESS_TOKEN_EXPIRE_MINUTES=60
-REFRESH_TOKEN_EXPIRE_DAYS=14
+- магазин: `http://localhost:8080`
+- Swagger: `http://localhost:8080/docs`
+- ReDoc: `http://localhost:8080/redoc`
+- health check: `http://localhost:8080/health`
 
-# Rate limiting
-RATE_LIMIT_AUTH_REQUESTS=10000
-RATE_LIMIT_AUTH_WINDOW_SECONDS=60
+Миграции, создание администратора и базовых категорий выполняются автоматически контейнером API.
 
-# Админ по умолчанию
+## Локальный запуск backend
+
+```bash
+cd backend
+python -m venv .venv
+```
+
+Windows:
+
+```powershell
+.venv\Scripts\activate
+```
+
+Linux/macOS:
+
+```bash
+source .venv/bin/activate
+```
+
+Установка:
+
+```bash
+pip install -r requirements.txt -r requirements-dev.txt
+```
+
+Создайте `backend/.env` на основе `backend/.env.example`, затем:
+
+```bash
+alembic upgrade head
+python -m app.scripts.seed_categories
+python -m app.scripts.create_admin
+uvicorn app.main:app --reload
+```
+
+## Переменные окружения
+
+Минимально необходимы:
+
+```env
+DATABASE_URL=postgresql+asyncpg://shop:password@localhost:5432/shop
+SECRET_KEY=<random-secret-at-least-32-characters>
+FRONTEND_URL=http://localhost:8080
+CORS_ORIGINS=http://localhost:8080
+```
+
+Для восстановления пароля:
+
+```env
+RESEND_API_KEY=<resend-api-key>
+EMAIL_FROM=Green Garden <noreply@example.com>
+PASSWORD_RESET_EXPIRE_MINUTES=15
+```
+
+Для автоматического создания администратора:
+
+```env
 ADMIN_EMAIL=admin@example.com
 ADMIN_PHONE=+79990000000
-ADMIN_PASSWORD=AdminPass123!
-ADMIN_FULL_NAME=Admin Admin
+ADMIN_PASSWORD=<strong-password>
+ADMIN_FULL_NAME=Store Administrator
+```
 
-Тестирование
+**Файл `.env` нельзя публиковать или передавать покупателю с реальными секретами.**
 
+## Тесты
+
+```bash
 cd backend
+pytest -q
+```
 
-# Запуск всех тестов
-pytest
+Покрытие:
 
-# Запуск с отчётом о покрытии
+```bash
 pytest --cov=app --cov-report=term-missing
+```
 
-# Запуск с HTML-отчётом
-pytest --cov=app --cov-report=html
+CI запускает линтинг, тесты и Docker build.
 
-Требование ТЗ: покрытие тестами ≥ 75% ✅
+## API
 
-# API Документация
-После запуска проекта откройте:
-Swagger UI: http://localhost:8080/docs
-ReDoc: http://localhost:8080/redoc
+Основные маршруты:
 
-# Основные endpoints:
+| Метод | Endpoint | Назначение |
+|---|---|---|
+| POST | `/api/v1/auth/register` | Регистрация |
+| POST | `/api/v1/auth/login` | Вход |
+| POST | `/api/v1/auth/refresh` | Обновление токенов |
+| POST | `/api/v1/auth/forgot-password` | Запрос сброса пароля |
+| POST | `/api/v1/auth/reset-password` | Смена пароля по одноразовой ссылке |
+| GET | `/api/v1/products` | Каталог |
+| POST | `/api/v1/products` | Создание товара (admin) |
+| PATCH | `/api/v1/products/{id}` | Изменение товара (admin) |
+| DELETE | `/api/v1/products/{id}` | Soft-delete товара (admin) |
+| GET | `/api/v1/categories` | Категории |
+| POST | `/api/v1/cart/items` | Добавление в корзину |
+| GET | `/api/v1/cart` | Корзина |
+| POST | `/api/v1/orders/checkout` | Создание заказа |
+| POST | `/api/v1/orders/{id}/pay` | Демонстрационная оплата |
+| POST | `/api/v1/orders/{id}/cancel` | Отмена заказа |
+| GET | `/api/v1/orders` | Заказы пользователя |
+| GET | `/api/v1/orders/admin/all` | Все заказы (admin) |
+| PATCH | `/api/v1/orders/admin/{id}/status` | Изменение статуса (admin) |
 
- **Метод** **Путь** **Описание** 
+## Безопасность
 
-**POST**   **/api/v1/auth/register** **Регистрация пользователя**
+- `.env` исключён из Git;
+- access token проверяется как token типа `access`;
+- refresh token хранится на сервере по `jti` и ротируется;
+- reset token хранится только в виде SHA-256 hash и одноразово помечается использованным;
+- пароли хешируются bcrypt;
+- auth endpoints ограничены rate limiting;
+- validation errors корректно сериализуются;
+- публичные ошибки БД не раскрывают внутренние детали;
+- PostgreSQL не публикуется наружу через Docker Compose;
+- HTML-вывод frontend экранирует пользовательские данные.
 
-**POST**   **/api/v1/auth/login**      **Авторизация**
+## Перед продажей / production
 
-**GET**    **/api/v1/products**        **Список товаров**
+1. Сгенерировать новый `SECRET_KEY`.
+2. Задать уникальные PostgreSQL credentials.
+3. Настроить домен и HTTPS.
+4. Настроить Resend и SPF/DKIM/DMARC.
+5. Подключить настоящий платёжный провайдер.
+6. Настроить резервное копирование PostgreSQL.
+7. Настроить внешний rate limiter/WAF для нескольких API-инстансов.
+8. Проверить юридические требования магазина и политики обработки персональных данных.
+9. Не использовать демонстрационные admin credentials.
 
-**POST**   **/api/v1/cart/items**      **Добавить в корзину**
+## Лицензирование и продажа
 
-**GET**    **/api/v1/cart**            **Получить корзину**
-
-**POST**  **/api/v1/orders**          **Оформить заказ**
-
-#  Production-деплой
-
-Проект развёрнут на Яндекс Облаке:
-
-URL: http://111.88.155.227:8080
-
-# Демо-доступ:
-
-Email: admin@example.com
-
-Пароль: AdminPass$
-
-# Автор
-
-[Ольга Стасенко]
-
-GitHub: @solevla2016-alt
-
-Email: [solevla2016@gmail.com] 
-
+Перед коммерческой продажей добавьте выбранную лицензию, реквизиты правообладателя и условия поддержки. Удалённые из дистрибутива `.git`, `.env`, тестовые базы и локальные кэши не являются частью продукта.
