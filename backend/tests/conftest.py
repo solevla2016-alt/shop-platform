@@ -4,7 +4,7 @@ import time
 os.environ.setdefault("SECRET_KEY", "test-secret-key-for-testing-only-1234567890")
 os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite:///./test.db")
 os.environ.setdefault("ACCESS_TOKEN_EXPIRE_MINUTES", "60")
-os.environ.setdefault("RATE_LIMIT_AUTH_REQUESTS", "100")
+os.environ["RATE_LIMIT_AUTH_REQUESTS"] = "100"
 os.environ.setdefault("LOG_LEVEL", "WARNING")
 
 import pytest_asyncio  # noqa: E402
