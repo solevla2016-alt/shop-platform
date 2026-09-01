@@ -37,7 +37,7 @@ def upgrade() -> None:
     op.drop_table("auth_tokens")
     op.add_column("products", sa.Column("category_id", sa.Integer(), nullable=True))
     op.create_foreign_key("fk_products_category_id", "products", "categories", ["category_id"], ["id"])
-    op.execute(sa.text("UPDATE products SET category_id = (SELECT id FROM categories WHERE slug = products.category) WHERE category_id IS NULL"))
+    op.execute(sa.text("UPDATE products SET category_id = (SELECT id FROM categories WHERE slug = products.category::text) WHERE category_id IS NULL"))
     op.alter_column("products", "category_id", nullable=False)
     op.create_index("ix_products_category_id", "products", ["category_id"])
     op.alter_column("refresh_tokens", "jti", existing_type=sa.String(255), type_=sa.String(36))
