@@ -1,6 +1,8 @@
 """Product schemas."""
 from datetime import datetime
+
 from pydantic import BaseModel, ConfigDict, Field, field_validator
+
 
 class ProductBase(BaseModel):
     name: str = Field(min_length=1, max_length=255)
@@ -17,8 +19,10 @@ class ProductBase(BaseModel):
     def strip_strings(cls, value):
         return value.strip() if isinstance(value, str) else value
 
+
 class ProductCreate(ProductBase):
     pass
+
 
 class ProductUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=255)
@@ -35,13 +39,16 @@ class ProductUpdate(BaseModel):
     def strip_strings(cls, value):
         return value.strip() if isinstance(value, str) else value
 
+
 class ProductResponse(ProductBase):
     model_config = ConfigDict(from_attributes=True)
     id: int
     created_at: datetime
     updated_at: datetime
 
+
 ProductOut = ProductResponse
+
 
 class PaginatedProducts(BaseModel):
     items: list[ProductResponse]

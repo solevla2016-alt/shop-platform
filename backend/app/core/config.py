@@ -6,8 +6,14 @@ from pathlib import Path
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", case_sensitive=False, extra="ignore")
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        case_sensitive=False,
+        extra="ignore",
+    )
     app_name: str = "Green Garden"
     api_v1_prefix: str = "/api/v1"
     secret_key: str = Field(min_length=32)
@@ -25,7 +31,14 @@ class Settings(BaseSettings):
     def async_database_url(self) -> str:
         if self.database_url:
             return self.database_url
-        return f"postgresql+asyncpg://{self.postgres_user}:{self.postgres_password}@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
+        base = "postgresql+asyncpg://{}:{}@{}:{}/{}"
+        return base.format(
+            self.postgres_user,
+            self.postgres_password,
+            self.postgres_host,
+            self.postgres_port,
+            self.postgres_db,
+        )
 
     frontend_url: str = "http://localhost:8080"
     resend_api_key: str = ""
@@ -42,7 +55,12 @@ class Settings(BaseSettings):
 
     @property
     def cors_origin_list(self) -> list[str]:
-        return [item.strip().rstrip("/") for item in self.cors_origins.split(",") if item.strip()]
+        cleaned = [
+            item.strip().rstrip("/")
+            for item in self.cors_origins.split(",")
+            if item.strip()
+        ]
+        return cleaned
 
     @field_validator("frontend_url")
     @classmethod

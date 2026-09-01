@@ -7,18 +7,22 @@ os.environ.setdefault("ACCESS_TOKEN_EXPIRE_MINUTES", "60")
 os.environ.setdefault("RATE_LIMIT_AUTH_REQUESTS", "100")
 os.environ.setdefault("LOG_LEVEL", "WARNING")
 
-import pytest_asyncio
-from httpx import ASGITransport, AsyncClient
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
-from sqlalchemy.pool import NullPool
+import pytest_asyncio  # noqa: E402
+from httpx import ASGITransport, AsyncClient  # noqa: E402
+from sqlalchemy.ext.asyncio import (  # noqa: E402
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
+from sqlalchemy.pool import NullPool  # noqa: E402
 
-from app.core.security import create_access_token, hash_password
-from app.db.base import Base
-from app.db.session import get_db
-from app.main import app
-from app.models.category import Category
-from app.models.product import Product
-from app.models.user import User
+from app.core.security import create_access_token, hash_password  # noqa: E402
+from app.db.base import Base  # noqa: E402
+from app.db.session import get_db  # noqa: E402
+from app.main import app  # noqa: E402
+from app.models.category import Category  # noqa: E402
+from app.models.product import Product  # noqa: E402
+from app.models.user import User  # noqa: E402
 
 
 @pytest_asyncio.fixture(scope="session")

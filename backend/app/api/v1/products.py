@@ -375,4 +375,3 @@ async def delete_product(
     await db.refresh(product)
 
     return product
-

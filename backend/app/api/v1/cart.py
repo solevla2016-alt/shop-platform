@@ -129,7 +129,11 @@ async def add_cart_items(
             )
         )
 
-        new_quantity = (existing_item.quantity + quantity) if existing_item else quantity
+        new_quantity = (
+            existing_item.quantity + quantity
+            if existing_item
+            else quantity
+        )
         if new_quantity > 1000:
             raise BadRequestError("Количество одного товара не может превышать 1000")
         if existing_item:

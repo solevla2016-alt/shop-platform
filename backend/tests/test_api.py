@@ -671,6 +671,7 @@ async def test_security_helpers(
 
     assert response.status_code == 200
 
+
 @pytest.mark.asyncio
 async def test_auth_registration_duplicate_phone(client: AsyncClient, regular_user):
     import time
@@ -1262,8 +1263,20 @@ async def test_checkout_function_direct_selected(
     from app.schemas.order import CheckoutRequest
     from sqlalchemy import select
 
-    first = Product(name="Direct First", price=500, is_active=True, category_id=1, sku="DIRECT-FIRST")
-    second = Product(name="Direct Second", price=300, is_active=True, category_id=1, sku="DIRECT-SECOND")
+    first = Product(
+        name="Direct First",
+        price=500,
+        is_active=True,
+        category_id=1,
+        sku="DIRECT-FIRST",
+    )
+    second = Product(
+        name="Direct Second",
+        price=300,
+        is_active=True,
+        category_id=1,
+        sku="DIRECT-SECOND",
+    )
     db_session.add_all([first, second])
     await db_session.flush()
     cart = Cart(user_id=regular_user.id)
@@ -1304,7 +1317,13 @@ async def test_checkout_function_direct_no_selection_keeps_full_cart(
     from app.core.exceptions import BadRequestError
     from sqlalchemy import select
 
-    product = Product(name="Direct Only", price=100, is_active=True, category_id=1, sku="DIRECT-ONLY")
+    product = Product(
+        name="Direct Only",
+        price=100,
+        is_active=True,
+        category_id=1,
+        sku="DIRECT-ONLY",
+    )
     db_session.add(product)
     await db_session.flush()
     cart = Cart(user_id=regular_user.id)
@@ -1517,9 +1536,11 @@ async def test_password_schema_and_registration_validation(
 @pytest.mark.asyncio
 async def test_main_validation_handler_returns_json(
     client: AsyncClient,
+    admin_headers,
 ):
     response = await client.post(
         "/api/v1/products",
+        headers=admin_headers,
         json={
             "name": "",
             "price": -1,
@@ -1625,6 +1646,7 @@ async def test_health_check_database_failure(
 
     assert response.status_code == 503
     assert response.json()["database"] == "disconnected"
+
 
 @pytest.mark.asyncio
 async def test_products_list_validation_errors(
@@ -1995,7 +2017,7 @@ async def test_main_not_found_handler(
 
 
 @pytest.mark.asyncio
-async def test_main_validation_handler_returns_json(
+async def test_products_invalid_page_returns_validation_json(
     client: AsyncClient,
 ):
     response = await client.get(
@@ -2194,5 +2216,3 @@ async def test_get_db_dependency_yields_session():
         assert Base is not None
         assert session is not None
         break
-
-

@@ -310,4 +310,3 @@ async def send_password_reset_email(
             recipient,
         )
         raise
-
