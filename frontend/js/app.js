@@ -20,7 +20,14 @@ const state = {
     productsPage: 1,
     productsPages: 1,
     isRefreshing: false,
+    editingCategoryId: null,
+    editingProductId: null,
+    cartItems: [],
+    cartSelected: null,
+    checkoutSelected: [],
 };
+
+const WISHLIST_KEY = "garden_wishlist";
 
 let currentOrderId = null;
 let selectedPaymentMethod = null;
@@ -400,6 +407,28 @@ async function apiFetch(path, options = {}, useAuth = true) {
 
 
 /* ============================================================
+   UPLOADS
+   ============================================================ */
+
+async function uploadImage(file, folder) {
+    if (!file) {
+        return null;
+    }
+
+    const formData = new FormData();
+    formData.append("folder", folder);
+    formData.append("file", file);
+
+    const result = await apiFetch("/uploads", {
+        method: "POST",
+        body: formData,
+    });
+
+    return result?.url || null;
+}
+
+
+/* ============================================================
    FORMATTING
    ============================================================ */
 
@@ -441,6 +470,67 @@ function getCategoryById(id) {
     return allCategories.find(
         (category) => category.id === Number(id)
     );
+}
+
+
+const SLUG_TRANSLIT = {
+    "а": "a", "б": "b", "в": "v", "г": "g", "д": "d",
+    "е": "e", "ё": "e", "ж": "zh", "з": "z", "и": "i",
+    "й": "i", "к": "k", "л": "l", "м": "m", "н": "n",
+    "о": "o", "п": "p", "р": "r", "с": "s", "т": "t",
+    "у": "u", "ф": "f", "х": "h", "ц": "ts", "ч": "ch",
+    "ш": "sh", "щ": "sch", "ъ": "", "ы": "y", "ь": "",
+    "э": "e", "ю": "iu", "я": "ia",
+};
+
+
+function slugify(value) {
+    const lower = String(value || "")
+        .toLowerCase()
+        .trim();
+
+    let result = "";
+
+    for (const char of lower) {
+        const translit = SLUG_TRANSLIT[char];
+
+        if (translit !== undefined) {
+            result += translit;
+        } else if (/[a-z0-9]/.test(char)) {
+            result += char;
+        } else if (/[\s_-]/.test(char)) {
+            result += "-";
+        }
+    }
+
+    result = result.replace(/-{2,}/g, "-");
+    result = result.replace(/^-+|-+$/g, "");
+
+    // Несколько слов подряд складываем через дефис у исходных пробелов.
+    result = result.replace(/\s+/g, "-");
+
+    return result;
+}
+
+
+function bindCategorySlugAutofill() {
+    const nameInput = $("#category-name");
+    const slugInput = $("#category-slug");
+
+    if (!nameInput || !slugInput) {
+        return;
+    }
+
+    nameInput.addEventListener("input", () => {
+        // Автозаполняем только если пользователь ещё не вводил slug вручную.
+        if (!slugInput.dataset.edited) {
+            slugInput.value = slugify(nameInput.value);
+        }
+    });
+
+    slugInput.addEventListener("input", () => {
+        slugInput.dataset.edited = "1";
+    });
 }
 
 
@@ -628,6 +718,14 @@ function showView(name) {
         loadAdminProducts().catch((error) => {
             showToast(error.message, "error");
         });
+
+        loadAdminCategories().catch((error) => {
+            showToast(error.message, "error");
+        });
+
+        loadAdminOrders().catch((error) => {
+            showToast(error.message, "error");
+        });
     }
 }
 
@@ -695,7 +793,7 @@ function renderNav() {
     if (guestLoginButton) guestLoginButton.classList.add("hidden");
 
     if (userName) {
-        userName.textContent = state.user.full_name || state.user.email;
+        userName.textContent = state.user.full_name || "";
     }
 
     if (adminNav) {
@@ -797,7 +895,6 @@ function productCard(product) {
     const id = Number(product.id);
     const name = escapeHtml(product.name);
     const sku = escapeHtml(product.sku);
-    const description = escapeHtml(product.description || "");
     const size = escapeHtml(product.size || "");
     const imageUrl = product.image_url
         ? escapeAttribute(product.image_url)
@@ -827,18 +924,26 @@ function productCard(product) {
             </div>
         `;
 
-    const descriptionHtml = description
-        ? `<p class="product-description">${description}</p>`
-        : "";
-
     const sizeHtml = size
         ? `<div class="product-size">📏 ${size}</div>`
         : "";
 
     const isActive = Boolean(product.is_active);
+    const wishlisted = isWishlisted(id);
 
     return `
-        <article class="product-card">
+        <article class="product-card" data-id="${id}">
+            <button
+                type="button"
+                class="wishlist-btn ${wishlisted ? "active" : ""}"
+                data-action="toggle-wishlist"
+                data-id="${id}"
+                aria-label="В избранное"
+                title="В избранное"
+            >
+                ${wishlisted ? "♥" : "♡"}
+            </button>
+
             ${imageHtml}
 
             <div class="product-card-header">
@@ -860,8 +965,6 @@ function productCard(product) {
             </div>
 
             ${sizeHtml}
-
-            ${descriptionHtml}
 
             <div class="product-price">
                 ${formatMoney(product.price)}
@@ -932,9 +1035,20 @@ async function loadProducts() {
         false
     );
 
-    const items = Array.isArray(data)
+    let items = Array.isArray(data)
         ? data
         : data?.items || [];
+
+    const wishlistOnly =
+        $("#filter-wishlist-only")?.checked;
+
+    if (wishlistOnly) {
+        const wishlistIds = new Set(getWishlist());
+        items = items.filter(
+            (product) =>
+                wishlistIds.has(Number(product.id))
+        );
+    }
 
     state.productsPages = Number(data?.pages || 1);
 
@@ -947,7 +1061,11 @@ async function loadProducts() {
                 color: var(--text-secondary);
                 padding: 40px;
             ">
-                Товары не найдены
+                ${
+                    wishlistOnly
+                        ? "В избранном нет товаров"
+                        : "Товары не найдены"
+                }
             </p>
         `;
 
@@ -956,6 +1074,189 @@ async function loadProducts() {
     if (pageInfo) {
         pageInfo.textContent =
             `Страница ${state.productsPage} из ${state.productsPages}`;
+    }
+}
+
+
+async function showProduct(productId) {
+    const container = $("#product-detail");
+
+    if (!container) {
+        return;
+    }
+
+    container.innerHTML = `
+        <div class="modal-loading">
+            Загрузка...
+        </div>
+    `;
+
+    showView("product");
+
+    try {
+        const product = await apiFetch(
+            `/products/${Number(productId)}`,
+            {},
+            false
+        );
+
+        const id = Number(product.id);
+        const name = escapeHtml(product.name);
+        const sku = escapeHtml(product.sku || "");
+        const size = escapeHtml(product.size || "");
+        const description = escapeHtml(product.description || "");
+        const isActive = Boolean(product.is_active);
+        const wishlisted = isWishlisted(id);
+
+        const category = getCategoryById(product.category_id);
+
+        const categoryHtml = category
+            ? `${escapeHtml(category.icon || "🌿")} ${escapeHtml(
+                  category.name
+              )}`
+            : "Без категории";
+
+        const imageHtml = product.image_url
+            ? `
+                <img
+                    src="${escapeAttribute(product.image_url)}"
+                    alt="${name}"
+                    class="product-detail-image"
+                    onerror="this.outerHTML='<div class=&quot;product-detail-placeholder&quot;>📦</div>'"
+                />
+            `
+            : `
+                <div class="product-detail-placeholder">
+                    📦
+                </div>
+            `;
+
+        container.innerHTML = `
+            <div class="product-detail">
+                <div class="product-detail-actions">
+                    <button
+                        type="button"
+                        class="btn btn-secondary btn-sm"
+                        data-action="back-to-catalog"
+                    >
+                        ← Назад
+                    </button>
+                </div>
+
+                <div class="product-detail-grid">
+                    ${imageHtml}
+
+                    <div class="product-detail-info">
+                        <div class="product-detail-category">
+                            ${categoryHtml}
+                        </div>
+
+                        <h1 class="product-detail-title">
+                            ${name}
+                        </h1>
+
+                        <div class="product-detail-price">
+                            ${formatMoney(product.price)}
+                        </div>
+
+                        <div class="product-detail-meta">
+                            <span>Артикул: ${sku}</span>
+                            ${
+                                size
+                                    ? `<span>Размер: ${size}</span>`
+                                    : ""
+                            }
+                        </div>
+
+                        <div class="product-detail-buttons">
+                            <button
+                                type="button"
+                                class="btn btn-secondary"
+                                data-action="toggle-wishlist"
+                                data-id="${id}"
+                            >
+                                ${
+                                    wishlisted
+                                        ? "♥ В избранном"
+                                        : "♡ Добавить в избранное"
+                                }
+                            </button>
+
+                            <button
+                                type="button"
+                                class="btn btn-primary"
+                                data-action="order-product"
+                                data-id="${id}"
+                                ${!isActive ? "disabled" : ""}
+                            >
+                                Заказать
+                            </button>
+
+                            <button
+                                type="button"
+                                class="btn btn-secondary"
+                                data-action="add-to-cart"
+                                data-id="${id}"
+                                ${!isActive ? "disabled" : ""}
+                            >
+                                Добавить в корзину
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="product-detail-description">
+                    <h2>Описание</h2>
+                    <p>
+                        ${
+                            description ||
+                            "Описание отсутствует"
+                        }
+                    </p>
+                </div>
+            </div>
+        `;
+    } catch (error) {
+        container.innerHTML = `
+            <p class="modal-error">
+                Ошибка: ${escapeHtml(error.message)}
+            </p>
+        `;
+    }
+}
+
+
+function backToCatalog() {
+    showView("catalog");
+}
+
+
+async function orderProduct(productId) {
+    if (!isAuthenticated()) {
+        showAuthModal();
+        return;
+    }
+
+    try {
+        await apiFetch("/cart/items", {
+            method: "POST",
+            body: JSON.stringify({
+                items: [
+                    {
+                        product_id: Number(productId),
+                        quantity: 1,
+                    },
+                ],
+            }),
+        });
+
+        showToast("Товар добавлен для заказа");
+
+        await updateCartBadge();
+
+        showView("cart");
+    } catch (error) {
+        showToast(error.message, "error");
     }
 }
 
@@ -1032,12 +1333,79 @@ async function updateCartBadge() {
 }
 
 
+/* ============================================================
+   WISHLIST
+   ============================================================ */
+
+function getWishlist() {
+    try {
+        const raw = localStorage.getItem(WISHLIST_KEY);
+        const ids = raw ? JSON.parse(raw) : [];
+        return Array.isArray(ids)
+            ? ids.map(Number).filter(Number.isFinite)
+            : [];
+    } catch (error) {
+        return [];
+    }
+}
+
+
+function isWishlisted(productId) {
+    return getWishlist().includes(Number(productId));
+}
+
+
+function updateWishlistBadge() {
+    const badge = $("#wishlist-badge");
+
+    if (!badge) {
+        return;
+    }
+
+    const count = getWishlist().length;
+    badge.textContent = String(count);
+    badge.classList.toggle("badge-hidden", count === 0);
+}
+
+
+function toggleWishlist(productId) {
+    const id = Number(productId);
+    const list = getWishlist();
+    const index = list.indexOf(id);
+
+    if (index === -1) {
+        list.push(id);
+    } else {
+        list.splice(index, 1);
+    }
+
+    localStorage.setItem(WISHLIST_KEY, JSON.stringify(list));
+
+    updateWishlistBadge();
+
+    return index === -1;
+}
+
+
 function cartItemRow(item) {
     const productId = Number(item.product_id);
     const name = escapeHtml(item.name);
+    const selected =
+        state.cartSelected === null ||
+        state.cartSelected.includes(productId);
 
     return `
-        <div class="row">
+        <div class="row cart-item-row ${selected ? "" : "unselected"}">
+
+            <label class="cart-select">
+                <input
+                    type="checkbox"
+                    data-action="toggle-cart-selection"
+                    data-id="${productId}"
+                    ${selected ? "checked" : ""}
+                    aria-label="Выбрать товар"
+                >
+            </label>
 
             <div style="flex: 1;">
                 <div style="font-weight: 600;">
@@ -1087,6 +1455,20 @@ async function loadCart() {
         ? cart.items
         : [];
 
+    state.cartItems = items;
+
+    const itemIds = items.map((item) =>
+        Number(item.product_id)
+    );
+
+    if (state.cartSelected === null) {
+        state.cartSelected = itemIds;
+    } else {
+        state.cartSelected = state.cartSelected.filter(
+            (id) => itemIds.includes(id)
+        );
+    }
+
     container.innerHTML = items.length
         ? items.map(cartItemRow).join("")
         : `
@@ -1099,13 +1481,45 @@ async function loadCart() {
             </p>
         `;
 
+    const selectedIds = new Set(state.cartSelected);
+
+    const selectedTotal = items.reduce(
+        (sum, item) =>
+            selectedIds.has(Number(item.product_id))
+                ? sum + Number(item.subtotal || 0)
+                : sum,
+        0
+    );
+
     const total = $("#cart-total");
 
     if (total) {
-        total.textContent = formatMoney(cart?.total || 0);
+        total.textContent = formatMoney(selectedTotal);
     }
 
     await updateCartBadge();
+}
+
+
+function toggleCartSelection(productId) {
+    const id = Number(productId);
+
+    const current =
+        state.cartSelected === null
+            ? (state.cartItems || []).map((item) =>
+                  Number(item.product_id)
+              )
+            : [...state.cartSelected];
+
+    const index = current.indexOf(id);
+
+    if (index === -1) {
+        current.push(id);
+    } else {
+        current.splice(index, 1);
+    }
+
+    state.cartSelected = current;
 }
 
 
@@ -1114,13 +1528,178 @@ async function loadCart() {
    ============================================================ */
 
 async function checkout() {
+    const selected =
+        state.cartSelected === null
+            ? (state.cartItems || []).map((item) =>
+                  Number(item.product_id)
+              )
+            : [...state.cartSelected];
+
+    if (selected.length === 0) {
+        showToast(
+            "Выберите товары для заказа.",
+            "error"
+        );
+        return;
+    }
+
+    state.checkoutSelected = selected;
+
+    openCheckoutModal();
+}
+
+
+function openCheckoutModal() {
+    const modal = $("#checkout-modal");
+    const content = $("#checkout-content");
+
+    if (!modal || !content) {
+        return;
+    }
+
+    content.innerHTML = `
+        <div class="checkout-form">
+            <div class="form-group">
+                <label>Способ доставки</label>
+                <select id="checkout-delivery-method">
+                    <option value="pickup">Самовывоз</option>
+                    <option value="delivery">Транспортная компания (доставка)</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label>Стоимость доставки (₽)</label>
+                <input
+                    type="number"
+                    id="checkout-delivery-cost"
+                    value="0"
+                    min="0"
+                >
+            </div>
+
+            <div class="form-group">
+                <label>Адрес доставки</label>
+                <input
+                    type="text"
+                    id="checkout-delivery-address"
+                    placeholder="Город, улица, дом"
+                >
+            </div>
+
+            <div class="form-group">
+                <label>ФИО получателя (полностью)</label>
+                <input
+                    type="text"
+                    id="checkout-recipient-name"
+                    placeholder="Иванов Иван Иванович"
+                >
+            </div>
+
+            <div class="modal-buttons">
+                <button
+                    type="button"
+                    class="btn btn-secondary"
+                    data-action="close-checkout-modal"
+                >
+                    Отмена
+                </button>
+                <button
+                    type="button"
+                    class="btn btn-primary"
+                    data-action="confirm-checkout"
+                >
+                    Подтвердить заказ
+                </button>
+            </div>
+        </div>
+    `;
+
+    const methodSelect = content.querySelector(
+        "#checkout-delivery-method"
+    );
+
+    const addressGroup = content.querySelector(
+        "#checkout-delivery-address"
+    ).closest(".form-group");
+
+    const costGroup = content.querySelector(
+        "#checkout-delivery-cost"
+    ).closest(".form-group");
+
+    function syncMethod() {
+        const method = methodSelect.value;
+        const isDelivery = method === "delivery";
+        addressGroup.style.display = isDelivery
+            ? "flex"
+            : "none";
+        costGroup.style.display = isDelivery
+            ? "flex"
+            : "none";
+    }
+
+    methodSelect.addEventListener("change", syncMethod);
+    syncMethod();
+
+    modal.classList.remove("hidden");
+}
+
+
+function closeCheckoutModal() {
+    const modal = $("#checkout-modal");
+
+    if (modal) {
+        modal.classList.add("hidden");
+    }
+}
+
+
+async function confirmCheckout() {
+    const deliveryMethod = $("#checkout-delivery-method")?.value;
+
+    const deliveryCost = Number(
+        $("#checkout-delivery-cost")?.value || 0
+    );
+
+    const deliveryAddress =
+        $("#checkout-delivery-address")?.value.trim() || "";
+
+    const recipientName =
+        $("#checkout-recipient-name")?.value.trim() || "";
+
+    const isDelivery = deliveryMethod === "delivery";
+
+    if (isDelivery && (!deliveryAddress || !recipientName)) {
+        showToast(
+            "Укажите адрес доставки и ФИО получателя.",
+            "error"
+        );
+        return;
+    }
+
     try {
         await apiFetch(
             "/orders/checkout",
             {
                 method: "POST",
+                body: JSON.stringify({
+                    product_ids: state.checkoutSelected,
+                    delivery_method: deliveryMethod,
+                    delivery_cost: isDelivery
+                        ? deliveryCost
+                        : 0,
+                    delivery_address: isDelivery
+                        ? deliveryAddress
+                        : null,
+                    recipient_name: isDelivery
+                        ? recipientName
+                        : null,
+                }),
             }
         );
+
+        state.cartSelected = null;
+
+        closeCheckoutModal();
 
         showToast("Заказ успешно создан!");
 
@@ -1226,6 +1805,10 @@ function orderCard(order) {
                     <div class="muted">
                         ${formatDate(order.created_at)}
                     </div>
+
+                    <div class="order-items-count">
+                        Товаров: ${items.length}
+                    </div>
                 </div>
 
                 <div style="
@@ -1309,6 +1892,42 @@ function orderCard(order) {
                         .join("")
                 }
 
+            </div>
+
+            <div class="order-delivery">
+                <div class="order-delivery-title">
+                    🚚 Доставка
+                </div>
+
+                ${
+                    order.delivery_method === "delivery"
+                        ? `
+                            <div>
+                                Транспортная компания
+                            </div>
+                            <div>
+                                Стоимость доставки:
+                                ${formatMoney(
+                                    Number(
+                                        order.delivery_cost || 0
+                                    )
+                                )}
+                            </div>
+                            <div>
+                                Адрес: ${escapeHtml(
+                                    order.delivery_address || ""
+                                )}
+                            </div>
+                            <div>
+                                Получатель: ${escapeHtml(
+                                    order.recipient_name || ""
+                                )}
+                            </div>
+                        `
+                        : `
+                            <div>Самовывоз</div>
+                        `
+                }
             </div>
 
             <div style="
@@ -1527,6 +2146,498 @@ async function loadAdminProducts() {
 }
 
 
+/* ============================================================
+   ADMIN CATEGORIES
+   ============================================================ */
+
+function adminCategoryRow(category) {
+    const id = Number(category.id);
+    const name = escapeHtml(category.name);
+    const slug = escapeHtml(category.slug);
+    const icon = escapeHtml(category.icon || "");
+    const imageUrl = category.image_url
+        ? escapeAttribute(category.image_url)
+        : "";
+
+    const thumbHtml = imageUrl
+        ? `
+            <img
+                src="${imageUrl}"
+                alt="${name}"
+                style="
+                    width: 48px;
+                    height: 48px;
+                    object-fit: cover;
+                    border-radius: 8px;
+                    margin-right: 12px;
+                "
+                loading="lazy"
+                onerror="this.style.display='none'"
+            />
+        `
+        : "";
+
+    return `
+        <div class="row">
+
+            <div style="
+                flex: 1;
+                display: flex;
+                align-items: center;
+            ">
+
+                ${thumbHtml}
+
+                <div>
+                    <div style="font-weight: 600;">
+                        ${icon} ${name}
+                    </div>
+
+                    <div class="muted">
+                        ${slug}
+                    </div>
+                </div>
+
+            </div>
+
+            <div style="
+                display: flex;
+                gap: 8px;
+                flex-wrap: wrap;
+            ">
+
+                <button
+                    class="btn btn-secondary btn-sm"
+                    data-action="edit-category"
+                    data-id="${id}"
+                >
+                    Изменить
+                </button>
+
+                <button
+                    class="btn btn-danger btn-sm"
+                    data-action="delete-category"
+                    data-id="${id}"
+                >
+                    Удалить
+                </button>
+
+            </div>
+
+        </div>
+    `;
+}
+
+
+async function loadAdminCategories() {
+    const container = $("#admin-categories");
+
+    if (!container) {
+        return;
+    }
+
+    if (!state.user?.is_admin) {
+        container.innerHTML = "";
+        return;
+    }
+
+    const data = await apiFetch(
+        "/categories",
+        {},
+        false
+    );
+
+    allCategories = Array.isArray(data)
+        ? data
+        : data?.items || [];
+
+    renderCategorySelects();
+
+        container.innerHTML = allCategories.length
+        ? allCategories.map(adminCategoryRow).join("")
+        : `
+            <p style="
+                text-align: center;
+                color: var(--text-secondary);
+                padding: 20px;
+            ">
+                Категорий нет
+            </p>
+        `;
+}
+
+
+/* ============================================================
+   ADMIN ORDERS
+   ============================================================ */
+
+function adminOrderCard(order) {
+    const statusText = {
+        pending_payment: "Ожидает оплаты",
+        paid: "Оплачен",
+        cancelled: "Отменён",
+        created: "Создан",
+    };
+
+    const items = Array.isArray(order.items)
+        ? order.items
+        : [];
+
+    const deliveryText =
+        order.delivery_method === "delivery"
+            ? `Транспортная компания (${formatMoney(
+                  Number(order.delivery_cost || 0)
+              )})`
+            : "Самовывоз";
+
+    return `
+        <div class="admin-order-row">
+            <div class="admin-order-main">
+                <div class="admin-order-title">
+                    Заказ #${Number(order.id)}
+                </div>
+
+                <div class="muted">
+                    ${formatDate(order.created_at)}
+                </div>
+
+                <div class="admin-order-user">
+                    Пользователь #${Number(order.user_id)}
+                </div>
+            </div>
+
+            <div class="admin-order-info">
+                <div>
+                    Товаров: ${items.length}
+                </div>
+                <div>${deliveryText}</div>
+            </div>
+
+            <div class="admin-order-total">
+                ${formatMoney(order.total_amount)}
+            </div>
+
+            <div class="admin-order-status">
+                <span class="status-badge ${
+                    statusClassFor(order.status)
+                }">
+                    ${escapeHtml(
+                        statusText[order.status] || order.status
+                    )}
+                </span>
+
+                <select
+                    class="admin-status-select"
+                    data-action="admin-change-status"
+                    data-id="${Number(order.id)}"
+                >
+                    <option value="pending_payment"
+                        ${order.status === "pending_payment" ? "selected" : ""}>
+                        Ожидает оплаты
+                    </option>
+                    <option value="paid"
+                        ${order.status === "paid" ? "selected" : ""}>
+                        Оплачен
+                    </option>
+                    <option value="cancelled"
+                        ${order.status === "cancelled" ? "selected" : ""}>
+                        Отменён
+                    </option>
+                </select>
+            </div>
+        </div>
+    `;
+}
+
+
+function statusClassFor(status) {
+    if (status === "paid") {
+        return "paid";
+    }
+
+    if (status === "cancelled") {
+        return "cancelled";
+    }
+
+    return "pending";
+}
+
+
+function renderAdminOrderStats(orders) {
+    const statsElement = $("#admin-orders-stats");
+
+    if (!statsElement) {
+        return;
+    }
+
+    const total = orders.length;
+    const pending = orders.filter(
+        (order) =>
+            order.status === "pending_payment" ||
+            order.status === "created"
+    ).length;
+    const paid = orders.filter(
+        (order) => order.status === "paid"
+    ).length;
+    const cancelled = orders.filter(
+        (order) => order.status === "cancelled"
+    ).length;
+    const revenue = orders
+        .filter((order) => order.status === "paid")
+        .reduce(
+            (sum, order) =>
+                sum + Number(order.total_amount || 0),
+            0
+        );
+
+    statsElement.innerHTML = `
+        <div class="stat-card">
+            <div class="stat-value">${total}</div>
+            <div class="stat-label">Всего заказов</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">${pending}</div>
+            <div class="stat-label">Ожидают оплаты</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">${paid}</div>
+            <div class="stat-label">Оплачено</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">${cancelled}</div>
+            <div class="stat-label">Отменено</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">${formatMoney(revenue)}</div>
+            <div class="stat-label">Выручка</div>
+        </div>
+    `;
+}
+
+
+async function loadAdminOrders() {
+    const container = $("#admin-orders");
+    const statsElement = $("#admin-orders-stats");
+
+    if (!container || !statsElement) {
+        return;
+    }
+
+    if (!state.user?.is_admin) {
+        container.innerHTML = "";
+        statsElement.innerHTML = "";
+        return;
+    }
+
+    const data = await apiFetch(
+        "/orders/admin/all",
+        {},
+        false
+    );
+
+    const orders = Array.isArray(data)
+        ? data
+        : data?.items || [];
+
+    renderAdminOrderStats(orders);
+
+    container.innerHTML = orders.length
+        ? orders.map(adminOrderCard).join("")
+        : `
+            <p style="
+                text-align: center;
+                color: var(--text-secondary);
+                padding: 20px;
+            ">
+                Заказов нет
+            </p>
+        `;
+}
+
+
+async function adminChangeOrderStatus(orderId, status) {
+    await apiFetch(
+        `/orders/admin/${Number(orderId)}/status`,
+        {
+            method: "PATCH",
+            body: JSON.stringify({ status }),
+        }
+    );
+
+    showToast("Статус заказа обновлён");
+
+    await loadAdminOrders();
+}
+
+
+async function createCategory(payload) {
+    await apiFetch("/categories", {
+        method: "POST",
+        body: JSON.stringify(payload),
+    });
+
+    showToast("Категория создана");
+
+    await loadAdminCategories();
+}
+
+
+async function editCategory(categoryId) {
+    const id = Number(categoryId);
+
+    const category = await apiFetch(
+        `/categories/${id}`,
+        {},
+        false
+    );
+
+    if (!category || typeof category !== "object") {
+        showToast("Не удалось загрузить категорию.", "error");
+        return;
+    }
+
+    const name = $("#category-name");
+    const slug = $("#category-slug");
+    const icon = $("#category-icon");
+    const description = $("#category-description");
+    const currentImage = $("#category-current-image");
+    const title = $("#category-form-title");
+    const submitBtn = $("#category-submit-btn");
+    const banner = $("#category-edit-banner");
+    const fileInput = $("#category-image-file");
+    const existingImageUrl = category.image_url || null;
+
+    if (name) name.value = category.name || "";
+    if (slug) slug.value = category.slug || "";
+    if (icon) icon.value = category.icon || "";
+    if (description) description.value = category.description || "";
+    if (fileInput) fileInput.value = "";
+
+    if (currentImage) {
+        if (existingImageUrl) {
+            currentImage.innerHTML = `
+                <div class="muted" style="margin-bottom: 6px;">Текущее фото:</div>
+                <img
+                    src="${escapeAttribute(existingImageUrl)}"
+                    alt=""
+                    style="width: 96px; height: 96px; object-fit: cover; border-radius: 8px; border: 1px solid var(--border);"
+                    onerror="this.style.display='none'"
+                />
+            `;
+            currentImage.classList.remove("hidden");
+            currentImage.style.display = "block";
+        } else {
+            currentImage.innerHTML = "";
+            currentImage.classList.add("hidden");
+            currentImage.style.display = "none";
+        }
+    }
+
+    if (title) title.textContent = "Изменить категорию";
+    if (submitBtn) submitBtn.textContent = "Сохранить изменения";
+
+    if (banner) {
+        banner.classList.remove("hidden");
+        banner.style.display = "flex";
+    }
+
+    state.editingCategoryId = id;
+
+    const formCard = document.querySelector(".admin-form-card");
+    if (formCard) {
+        formCard.scrollIntoView({
+            behavior: "smooth",
+            block: "start",
+        });
+    }
+}
+
+
+function resetCategoryForm() {
+    state.editingCategoryId = null;
+
+    const form = $("#create-category-form");
+    if (form) form.reset();
+
+    const currentImage = $("#category-current-image");
+    if (currentImage) {
+        currentImage.innerHTML = "";
+        currentImage.classList.add("hidden");
+        currentImage.style.display = "none";
+    }
+
+    const title = $("#category-form-title");
+    if (title) title.textContent = "Добавить категорию";
+
+    const submitBtn = $("#category-submit-btn");
+    if (submitBtn) submitBtn.textContent = "Создать категорию";
+
+    const banner = $("#category-edit-banner");
+    if (banner) {
+        banner.classList.add("hidden");
+        banner.style.display = "none";
+    }
+
+    const slugInput = $("#category-slug");
+    if (slugInput) delete slugInput.dataset.edited;
+}
+
+
+function cancelCategoryEdit() {
+    resetCategoryForm();
+}
+
+
+async function loadCategoriesData() {
+    try {
+        const data = await apiFetch(
+            "/categories",
+            {},
+            false
+        );
+
+        allCategories = Array.isArray(data)
+            ? data
+            : data?.items || [];
+
+        renderCategories();
+        renderCategorySelects();
+    } catch (error) {
+        console.error(
+            "Failed to reload categories:",
+            error
+        );
+    }
+}
+
+
+async function deleteCategory(categoryId) {
+    if (
+        !confirm(
+            "Удалить категорию? (нельзя удалить, если в ней есть товары)"
+        )
+    ) {
+        return;
+    }
+
+    try {
+        await apiFetch(
+            `/categories/${Number(categoryId)}`,
+            {
+                method: "DELETE",
+            }
+        );
+
+        showToast("Категория удалена");
+
+        await loadAdminCategories();
+        await loadCategories();
+    } catch (error) {
+        showToast(error.message, "error");
+    }
+}
+
+
 async function createProduct(payload) {
     await apiFetch("/products", {
         method: "POST",
@@ -1540,68 +2651,120 @@ async function createProduct(payload) {
 
 
 async function editProduct(productId) {
+    const id = Number(productId);
+
     const product = await apiFetch(
-        `/products/${Number(productId)}`
+        `/products/${id}`
     );
 
-    const currentName = product.name || "";
-    const currentPrice = product.price || 0;
-
-    const name = prompt(
-        "Новое название:",
-        currentName
-    );
-
-    if (name === null) {
+    if (!product || typeof product !== "object") {
+        showToast("Не удалось загрузить товар.", "error");
         return;
     }
 
-    const cleanName = name.trim();
+    const name = $("#product-name");
+    const sku = $("#product-sku");
+    const price = $("#product-price");
+    const category = $("#product-category-create");
+    const size = $("#product-size");
+    const description = $("#product-description");
+    const active = $("#product-is-active");
+    const fileInput = $("#product-image-file");
+    const currentImage = $("#product-current-image");
+    const title = $("#product-form-title");
+    const submitBtn = $("#product-submit-btn");
+    const banner = $("#product-edit-banner");
 
-    if (!cleanName) {
-        showToast(
-            "Название не может быть пустым.",
-            "error"
-        );
-        return;
+    if (name) name.value = product.name || "";
+    if (sku) sku.value = product.sku || "";
+    if (price) price.value = product.price ?? "";
+    if (size) size.value = product.size || "";
+    if (description) description.value = product.description || "";
+    if (active) active.checked = product.is_active !== false;
+    if (fileInput) fileInput.value = "";
+
+    if (category) {
+        const categoryId = String(product.category_id ?? "");
+        category.value = categoryId;
     }
 
-    const price = prompt(
-        "Новая цена:",
-        currentPrice
-    );
+    if (currentImage) {
+        const existingImageUrl = product.image_url || null;
 
-    if (price === null) {
-        return;
-    }
-
-    const numericPrice = Number(price);
-
-    if (
-        !Number.isFinite(numericPrice) ||
-        numericPrice <= 0
-    ) {
-        showToast(
-            "Цена должна быть положительным числом.",
-            "error"
-        );
-        return;
-    }
-
-    await apiFetch(
-        `/products/${Number(productId)}`,
-        {
-            method: "PATCH",
-            body: JSON.stringify({
-                name: cleanName,
-                price: numericPrice,
-            }),
+        if (existingImageUrl) {
+            currentImage.innerHTML = `
+                <div class="muted" style="margin-bottom: 6px;">Текущее фото:</div>
+                <img
+                    src="${escapeAttribute(existingImageUrl)}"
+                    alt=""
+                    style="width: 96px; height: 96px; object-fit: cover; border-radius: 8px; border: 1px solid var(--border);"
+                    onerror="this.style.display='none'"
+                />
+            `;
+            currentImage.classList.remove("hidden");
+            currentImage.style.display = "block";
+        } else {
+            currentImage.innerHTML = "";
+            currentImage.classList.add("hidden");
+            currentImage.style.display = "none";
         }
+    }
+
+    if (title) title.textContent = "Изменить товар";
+    if (submitBtn) submitBtn.textContent = "Сохранить изменения";
+
+    if (banner) {
+        banner.classList.remove("hidden");
+        banner.style.display = "flex";
+    }
+
+    state.editingProductId = id;
+
+    const formCard = document.querySelector(
+        ".admin-form-card"
     );
 
-    showToast("Товар обновлён");
+    if (formCard) {
+        formCard.scrollIntoView({
+            behavior: "smooth",
+            block: "start",
+        });
+    }
+}
 
-    await loadAdminProducts();
+
+function resetProductForm() {
+    state.editingProductId = null;
+
+    const form = $("#create-product-form");
+    if (form) form.reset();
+
+    const active = $("#product-is-active");
+    if (active) active.checked = true;
+
+    const currentImage = $("#product-current-image");
+    if (currentImage) {
+        currentImage.innerHTML = "";
+        currentImage.classList.add("hidden");
+        currentImage.style.display = "none";
+    }
+
+    const title = $("#product-form-title");
+    if (title) title.textContent = "Добавить новый товар";
+
+    const submitBtn = $("#product-submit-btn");
+    if (submitBtn) submitBtn.textContent = "Создать товар";
+
+    const banner = $("#product-edit-banner");
+    if (banner) {
+        banner.classList.add("hidden");
+        banner.style.display = "none";
+    }
+}
+
+
+function cancelProductEdit() {
+    resetProductForm();
 }
 
 
@@ -1623,20 +2786,28 @@ async function toggleProduct(productId, isActive) {
 
 
 async function deleteProduct(productId) {
-    if (!confirm("Деактивировать товар?")) {
+    if (
+        !confirm(
+            "Удалить товар навсегда? (товар, который есть в заказах, удалить нельзя)"
+        )
+    ) {
         return;
     }
 
-    await apiFetch(
-        `/products/${Number(productId)}`,
-        {
-            method: "DELETE",
-        }
-    );
+    try {
+        await apiFetch(
+            `/products/${Number(productId)}`,
+            {
+                method: "DELETE",
+            }
+        );
 
-    showToast("Товар деактивирован");
+        showToast("Товар удалён");
 
-    await loadAdminProducts();
+        await loadAdminProducts();
+    } catch (error) {
+        showToast(error.message, "error");
+    }
 }
 
 
@@ -1908,6 +3079,11 @@ function showAuthModal() {
     if (modal) {
         modal.classList.remove("hidden");
     }
+
+    const loginIdentifier = $("#login-identifier");
+    const loginPassword = $("#login-password");
+    if (loginIdentifier) loginIdentifier.value = "";
+    if (loginPassword) loginPassword.value = "";
 }
 
 
@@ -2351,6 +3527,15 @@ function bindForms() {
                     return;
                 }
 
+                const consent = document.getElementById("register-consent");
+                if (!consent || !consent.checked) {
+                    showToast(
+                        "Необходимо согласиться с условиями магазина и обработкой персональных данных.",
+                        "error"
+                    );
+                    return;
+                }
+
                 const passwordError =
                     validatePasswordClient(
                         password
@@ -2402,6 +3587,18 @@ function bindForms() {
     const createProductForm =
         $("#create-product-form");
 
+    const productCancelBtn =
+        $("#product-cancel-btn");
+
+    if (productCancelBtn) {
+        productCancelBtn.addEventListener(
+            "click",
+            () => {
+                cancelProductEdit();
+            }
+        );
+    }
+
     if (createProductForm) {
         createProductForm.addEventListener(
             "submit",
@@ -2417,6 +3614,30 @@ function bindForms() {
                     if (!categoryValue) {
                         showToast(
                             "Выберите категорию.",
+                            "error"
+                        );
+                        return;
+                    }
+
+                    const name = $(
+                        "#product-name"
+                    )?.value.trim() || "";
+
+                    const sku = $(
+                        "#product-sku"
+                    )?.value.trim() || "";
+
+                    if (!name) {
+                        showToast(
+                            "Введите название.",
+                            "error"
+                        );
+                        return;
+                    }
+
+                    if (!sku) {
+                        showToast(
+                            "Введите артикул.",
                             "error"
                         );
                         return;
@@ -2438,58 +3659,266 @@ function bindForms() {
                         return;
                     }
 
-                    await createProduct({
-                        name:
-                            $(
-                                "#product-name"
-                            )?.value.trim() || "",
+                    const size =
+                        $(
+                            "#product-size"
+                        )?.value.trim() ||
+                        null;
 
-                        sku:
-                            $(
-                                "#product-sku"
-                            )?.value.trim() || "",
+                    const description =
+                        $(
+                            "#product-description"
+                        )?.value.trim() ||
+                        null;
 
-                        price,
-
-                        category_id:
-                            Number(
-                                categoryValue
-                            ),
-
-                        size:
-                            $(
-                                "#product-size"
-                            )?.value.trim() ||
-                            null,
-
-                        description:
-                            $(
-                                "#product-description"
-                            )?.value.trim() ||
-                            null,
-
-                        image_url:
-                            $(
-                                "#product-image-url"
-                            )?.value.trim() ||
-                            null,
-
-                        is_active:
-                            $(
-                                "#product-is-active"
-                            )?.checked ?? true,
-                    });
-
-                    createProductForm.reset();
-
-                    const activeCheckbox =
+                    const isActive =
                         $(
                             "#product-is-active"
+                        )?.checked ?? true;
+
+                    const imageFile =
+                        $("#product-image-file")
+                            ?.files?.[0];
+
+                    const editingId =
+                        state.editingProductId;
+
+                    if (editingId !== null) {
+                        // Редактирование: фото опционально.
+                        const payload = {
+                            name,
+                            sku,
+                            price,
+                            category_id: Number(
+                                categoryValue
+                            ),
+                            size,
+                            description,
+                            is_active: isActive,
+                        };
+
+                        if (imageFile) {
+                            showToast(
+                                "Загрузка фото..."
+                            );
+                            payload.image_url =
+                                await uploadImage(
+                                    imageFile,
+                                    "products"
+                                );
+                        }
+
+                        await apiFetch(
+                            `/products/${editingId}`,
+                            {
+                                method: "PATCH",
+                                body: JSON.stringify(
+                                    payload
+                                ),
+                            }
                         );
 
-                    if (activeCheckbox) {
-                        activeCheckbox.checked =
-                            true;
+                        showToast(
+                            "Товар обновлён"
+                        );
+
+                        resetProductForm();
+
+                        await loadAdminProducts();
+                    } else {
+                        const imageUrl = await uploadImage(
+                            imageFile,
+                            "products"
+                        );
+
+                        await createProduct({
+                            name,
+                            sku,
+                            price,
+                            category_id:
+                                Number(
+                                    categoryValue
+                                ),
+                            size,
+                            description,
+                            image_url: imageUrl,
+                            is_active: isActive,
+                        });
+
+                        createProductForm.reset();
+
+                        const activeCheckbox =
+                            $(
+                                "#product-is-active"
+                            );
+
+                        if (activeCheckbox) {
+                            activeCheckbox.checked =
+                                true;
+                        }
+
+                        await loadAdminProducts();
+                    }
+                } catch (error) {
+                    showToast(
+                        error.message,
+                        "error"
+                    );
+                }
+            }
+        );
+    }
+
+
+    const createCategoryForm =
+        $("#create-category-form");
+
+    const categoryCancelBtn =
+        $("#category-cancel-btn");
+
+    if (categoryCancelBtn) {
+        categoryCancelBtn.addEventListener(
+            "click",
+            () => {
+                cancelCategoryEdit();
+            }
+        );
+    }
+
+    if (createCategoryForm) {
+        createCategoryForm.addEventListener(
+            "submit",
+            async (event) => {
+                event.preventDefault();
+
+                try {
+                    const nameForm =
+                        $("#category-name")
+                            ?.value.trim() || "";
+
+                    const slugForm =
+                        $("#category-slug")
+                            ?.value.trim() || "";
+
+                    if (!nameForm) {
+                        showToast(
+                            "Введите название.",
+                            "error"
+                        );
+                        return;
+                    }
+
+                    // Если slug не задан вручную — генерируем из названия.
+                    // В любом случае приводим к корректному формату.
+                    const effectiveSlug = slugForm
+                        ? slugify(slugForm)
+                        : slugify(nameForm);
+
+                    if (!effectiveSlug) {
+                        showToast(
+                            "Не удалось сформировать slug.",
+                            "error"
+                        );
+                        return;
+                    }
+
+                    const iconForm =
+                        $("#category-icon")
+                            ?.value.trim() || null;
+
+                    const descriptionForm =
+                        $("#category-description")
+                            ?.value.trim() || null;
+
+                    const imageFile =
+                        $("#category-image-file")
+                            ?.files?.[0];
+
+                    const editingId =
+                        state.editingCategoryId;
+
+                    if (editingId !== null) {
+                        // Режим редактирования: фото не обязательное.
+                        // Если файл не выбран — прежнее фото сохраняется.
+                        let newImageUrl;
+                        let currentImageUrl = null;
+
+                        try {
+                            const current =
+                                await apiFetch(
+                                    `/categories/${editingId}`,
+                                    {},
+                                    false
+                                );
+                            currentImageUrl =
+                                current?.image_url || null;
+                        } catch (_ignored) {
+                            currentImageUrl = null;
+                        }
+
+                        if (imageFile) {
+                            showToast(
+                                "Загрузка фото..."
+                            );
+                            newImageUrl =
+                                await uploadImage(
+                                    imageFile,
+                                    "categories"
+                                );
+                        } else {
+                            newImageUrl =
+                                currentImageUrl;
+                        }
+
+                        await apiFetch(
+                            `/categories/${editingId}`,
+                            {
+                                method: "PATCH",
+                                body: JSON.stringify({
+                                    name: nameForm,
+                                    slug: effectiveSlug,
+                                    icon: iconForm,
+                                    description: descriptionForm || null,
+                                    image_url: newImageUrl,
+                                }),
+                            }
+                        );
+
+                        showToast(
+                            "Категория обновлена"
+                        );
+
+                        resetCategoryForm();
+
+                        await loadAdminCategories();
+                        await loadCategoriesData();
+                    } else {
+                        const imageUrl = await uploadImage(
+                            imageFile,
+                            "categories"
+                        );
+
+                        await createCategory({
+                            name: nameForm,
+                            slug: effectiveSlug,
+                            icon: iconForm,
+                            description: descriptionForm,
+                            image_url: imageUrl,
+                        });
+
+                        createCategoryForm.reset();
+
+                        const slugInput =
+                            $("#category-slug");
+
+                        if (slugInput) {
+                            delete slugInput.dataset.edited;
+                            slugInput.value = slugify(
+                                $("#category-name")?.value || ""
+                            );
+                        }
+
+                        await loadCategories();
                     }
                 } catch (error) {
                     showToast(
@@ -2626,6 +4055,99 @@ function bindGlobalActions() {
                 }
 
                 if (
+                    action ===
+                    "close-checkout-modal"
+                ) {
+                    closeCheckoutModal();
+                    return;
+                }
+
+                if (
+                    action ===
+                    "confirm-checkout"
+                ) {
+                    await confirmCheckout();
+                    return;
+                }
+
+                if (
+                    action ===
+                    "show-wishlist"
+                ) {
+                    const wishlistFilter =
+                        $("#filter-wishlist-only");
+
+                    if (wishlistFilter) {
+                        wishlistFilter.checked = true;
+                    }
+
+                    state.productsPage = 1;
+                    showView("catalog");
+                    return;
+                }
+
+                if (
+                    action ===
+                    "toggle-wishlist"
+                ) {
+                    const id = Number(
+                        target.dataset.id
+                    );
+                    const added =
+                        toggleWishlist(id);
+
+                    showToast(
+                        added
+                            ? "Добавлено в избранное"
+                            : "Удалено из избранного"
+                    );
+
+                    const productView =
+                        $("#view-product");
+
+                    if (
+                        productView &&
+                        !productView.classList.contains(
+                            "hidden"
+                        )
+                    ) {
+                        await showProduct(id);
+                    } else {
+                        await loadProducts();
+                    }
+                    return;
+                }
+
+                if (
+                    action ===
+                    "toggle-cart-selection"
+                ) {
+                    toggleCartSelection(
+                        target.dataset.id
+                    );
+                    await loadCart();
+                    return;
+                }
+
+                if (
+                    action ===
+                    "back-to-catalog"
+                ) {
+                    backToCatalog();
+                    return;
+                }
+
+                if (
+                    action ===
+                    "order-product"
+                ) {
+                    await orderProduct(
+                        target.dataset.id
+                    );
+                    return;
+                }
+
+                if (
                     action === "edit-product"
                 ) {
                     await editProduct(
@@ -2655,6 +4177,26 @@ function bindGlobalActions() {
                     "delete-product"
                 ) {
                     await deleteProduct(
+                        target.dataset.id
+                    );
+                    return;
+                }
+
+                if (
+                    action ===
+                    "edit-category"
+                ) {
+                    await editCategory(
+                        target.dataset.id
+                    );
+                    return;
+                }
+
+                if (
+                    action ===
+                    "delete-category"
+                ) {
+                    await deleteCategory(
                         target.dataset.id
                     );
                     return;
@@ -2813,6 +4355,52 @@ function bindGlobalActions() {
             ) {
                 closeResetModal();
             }
+
+            if (
+                event.target.id ===
+                "checkout-modal"
+            ) {
+                closeCheckoutModal();
+            }
+        }
+    );
+
+
+    /*
+     * Клик по товару — открыть полное описание.
+     */
+    document.addEventListener(
+        "click",
+        (event) => {
+            if (
+                event.target.closest(
+                    "[data-action]"
+                )
+            ) {
+                return;
+            }
+
+            const card = event.target.closest(
+                ".product-card"
+            );
+
+            if (!card) {
+                return;
+            }
+
+            const id = Number(
+                card.dataset.id
+            );
+
+            if (id) {
+                showProduct(id).catch(
+                    (error) =>
+                        showToast(
+                            error.message,
+                            "error"
+                        )
+                );
+            }
         }
     );
 
@@ -2844,6 +4432,49 @@ function bindGlobalActions() {
             }
         }
     );
+
+
+    document.addEventListener(
+        "change",
+        async (event) => {
+            const select = event.target.closest(
+                "[data-action='admin-change-status']"
+            );
+
+            if (!select) {
+                return;
+            }
+
+            const orderId = Number(
+                select.dataset.id
+            );
+
+            if (!orderId) {
+                return;
+            }
+
+            const status = select.value;
+
+            try {
+                await adminChangeOrderStatus(
+                    orderId,
+                    status
+                );
+            } catch (error) {
+                select.value =
+                    select.querySelector(
+                        "option[selected]"
+                    )?.value || "";
+
+                showToast(
+                    error.message,
+                    "error"
+                );
+
+                await loadAdminOrders();
+            }
+        }
+    );
 }
 
 
@@ -2863,6 +4494,9 @@ function bindFilterEvents() {
 
     const inactive =
         $("#filter-include-inactive");
+
+    const wishlistOnly =
+        $("#filter-wishlist-only");
 
     if (sortBy) {
         sortBy.addEventListener(
@@ -2927,6 +4561,22 @@ function bindFilterEvents() {
             }
         );
     }
+
+    if (wishlistOnly) {
+        wishlistOnly.addEventListener(
+            "change",
+            () => {
+                state.productsPage = 1;
+                loadProducts().catch(
+                    (error) =>
+                        showToast(
+                            error.message,
+                            "error"
+                        )
+                );
+            }
+        );
+    }
 }
 
 
@@ -2940,6 +4590,8 @@ async function init() {
         bindGlobalActions();
         bindFilterEvents();
         initPasswordToggles();
+        bindCategorySlugAutofill();
+        updateWishlistBadge();
 
         await loadCategories();
 

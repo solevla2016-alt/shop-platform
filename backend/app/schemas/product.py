@@ -6,7 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 class ProductBase(BaseModel):
     name: str = Field(min_length=1, max_length=255)
-    description: str | None = Field(default=None, max_length=5000)
+    description: str | None = Field(default=None, max_length=20000)
     image_url: str | None = Field(default=None, max_length=500)
     price: int = Field(gt=0)
     is_active: bool = True
@@ -26,7 +26,7 @@ class ProductCreate(ProductBase):
 
 class ProductUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=255)
-    description: str | None = Field(default=None, max_length=5000)
+    description: str | None = Field(default=None, max_length=20000)
     image_url: str | None = Field(default=None, max_length=500)
     price: int | None = Field(default=None, gt=0)
     is_active: bool | None = None

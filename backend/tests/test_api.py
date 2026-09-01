@@ -1916,7 +1916,6 @@ async def test_product_delete(
     data = response.json()
 
     assert data["id"] == test_product.id
-    assert data["is_active"] is False
 
     response = await client.get(
         f"/api/v1/products/{test_product.id}"
@@ -1929,8 +1928,7 @@ async def test_product_delete(
         headers=admin_headers,
     )
 
-    assert response.status_code == 200
-    assert response.json()["is_active"] is False
+    assert response.status_code == 404
 
 
 @pytest.mark.asyncio

@@ -1,6 +1,6 @@
 import asyncio
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import (
     create_async_engine,
     async_sessionmaker,
@@ -84,31 +84,30 @@ CATEGORIES = [
 
 
 async def seed_categories():
-    """Add default categories to database."""
+    """Add default categories only to an empty database."""
     async with async_session() as session:
-        for cat_data in CATEGORIES:
-            result = await session.execute(
-                select(Category).where(
-                    Category.slug == cat_data["slug"]
-                )
+        total = await session.scalar(
+            select(func.count()).select_from(Category)
+        )
+
+        if total:
+            print(
+                f"\nℹ️ В базе уже есть {total} "
+                f"категорий(и). Пропускаем сидирование, "
+                f"чтобы не восстанавливать удалённые."
             )
+            await engine.dispose()
+            return
 
-            existing = result.scalar_one_or_none()
+        for cat_data in CATEGORIES:
+            category = Category(**cat_data)
 
-            if existing is None:
-                category = Category(**cat_data)
+            session.add(category)
 
-                session.add(category)
-
-                print(
-                    f"✅ Создана категория: "
-                    f"{cat_data['name']}"
-                )
-            else:
-                print(
-                    f"ℹ️ Категория уже существует: "
-                    f"{cat_data['name']}"
-                )
+            print(
+                f"✅ Создана категория: "
+                f"{cat_data['name']}"
+            )
 
         await session.commit()
 

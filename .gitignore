@@ -8,6 +8,7 @@ __pycache__/
 venv/
 
 test.db
+uploads/
 .coverage
 htmlcov/
 .pytest_cache/
@@ -15,3 +16,5 @@ htmlcov/
 .DS_Store
 
 .idea/
+
+deploy.tar

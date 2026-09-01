@@ -369,9 +369,17 @@ async def delete_product(
     if product is None:
         raise NotFoundError()
 
-    product.is_active = False
+    try:
+        await db.delete(product)
+        await db.commit()
 
-    await db.commit()
-    await db.refresh(product)
+    except IntegrityError as exc:
+        await db.rollback()
+
+        raise ConflictError(
+            "Товар нельзя удалить: он упоминается "
+            "в заказах. Вместо удаления можете "
+            "деактивировать товар."
+        ) from exc
 
     return product

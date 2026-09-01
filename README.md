@@ -97,7 +97,7 @@ source .venv/bin/activate
 pip install -r requirements.txt -r requirements-dev.txt
 ```
 
-Создайте `backend/.env` на основе `backend/.env.example`, затем:
+Создайте файл `.env` в корне проекта на основе `.env.example`, затем:
 
 ```bash
 alembic upgrade head
