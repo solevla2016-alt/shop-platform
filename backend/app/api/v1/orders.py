@@ -10,7 +10,7 @@ from app.db.session import get_db
 from app.models.cart import Cart, CartItem
 from app.models.order import Order, OrderItem
 from app.models.user import User
-from app.schemas.order import OrderOut, OrderStatusUpdate, PaymentRequest
+from app.schemas.order import OrderOut, OrderStatusUpdate, PaymentRequest, CheckoutRequest
 
 router = APIRouter(tags=["Orders"])
 
@@ -18,19 +18,58 @@ async def load_order(order_id: int, db: AsyncSession) -> Order | None:
     return await db.scalar(select(Order).options(selectinload(Order.items)).where(Order.id == order_id))
 
 @router.post("/checkout", response_model=OrderOut, status_code=status.HTTP_201_CREATED)
-async def checkout(user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+async def checkout(
+    payload: CheckoutRequest | None = None,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
     cart = await db.scalar(select(Cart).options(selectinload(Cart.items).joinedload(CartItem.product)).where(Cart.user_id == user.id))
     if not cart or not cart.items: raise BadRequestError("Cart is empty")
+
+    selected_ids = set(payload.product_ids) if (payload is not None and payload.product_ids is not None) else None
+
     order_items = []
     total = 0
+    checked_out: list[CartItem] = []
+
     for item in cart.items:
+        if selected_ids is not None and item.product_id not in selected_ids:
+            continue
         product = item.product
         if product is None or not product.is_active: raise BadRequestError("One of cart products is unavailable")
         subtotal = product.price * item.quantity; total += subtotal
         order_items.append(OrderItem(product_id=product.id, product_name=product.name, price=product.price, quantity=item.quantity, subtotal=subtotal))
-    order = Order(user_id=user.id, status="pending_payment", total_amount=total, items=order_items)
+        checked_out.append(item)
+
+    if not order_items: raise BadRequestError("Нет выбранных товаров для заказа")
+
+    delivery_method = payload.delivery_method if payload is not None else None
+    delivery_cost = payload.delivery_cost if payload is not None else 0
+    delivery_address = payload.delivery_address if payload is not None else None
+    recipient_name = payload.recipient_name if payload is not None else None
+
+    if delivery_method == "delivery":
+        if not delivery_address or not recipient_name:
+            raise BadRequestError("Для доставки укажите адрес и ФИО получателя")
+
+    if delivery_method == "pickup":
+        delivery_address = None
+        delivery_cost = 0
+
+    order = Order(
+        user_id=user.id,
+        status="pending_payment",
+        total_amount=total + delivery_cost,
+        items=order_items,
+        delivery_method=delivery_method,
+        delivery_cost=delivery_cost,
+        delivery_address=delivery_address,
+        recipient_name=recipient_name,
+    )
     db.add(order)
-    await db.execute(delete(CartItem).where(CartItem.cart_id == cart.id))
+
+    checked_out_ids = [item.product_id for item in checked_out]
+    await db.execute(delete(CartItem).where(CartItem.cart_id == cart.id, CartItem.product_id.in_(checked_out_ids)))
     try:
         await db.commit()
         await db.refresh(order)

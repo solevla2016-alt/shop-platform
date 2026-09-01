@@ -35,6 +35,7 @@ class ProductListParams:
     page: int
     size: int
     name: str | None
+    category_id: int | None
     min_price: int | None
     max_price: int | None
     sort_by: Literal["price", "created_at", "name"]
@@ -48,6 +49,10 @@ async def get_product_list_params(
     name: Annotated[
         str | None,
         Query(min_length=1, max_length=255),
+    ] = None,
+    category_id: Annotated[
+        int | None,
+        Query(ge=1),
     ] = None,
     min_price: Annotated[
         int | None,
@@ -80,6 +85,7 @@ async def get_product_list_params(
         page=page,
         size=size,
         name=name,
+        category_id=category_id,
         min_price=min_price,
         max_price=max_price,
         sort_by=sort_by,
@@ -114,6 +120,11 @@ async def list_products(
             Product.name.ilike(
                 f"%{params.name}%"
             )
+        )
+
+    if params.category_id is not None:
+        filters.append(
+            Product.category_id == params.category_id
         )
 
     if params.min_price is not None:

@@ -26,6 +26,12 @@ async def create_category(payload: CategoryCreate, admin: User = Depends(get_adm
         await db.rollback(); raise ConflictError("Категория с таким названием или slug уже существует") from exc
     return category
 
+@router.get("/{category_id}", response_model=CategoryResponse)
+async def get_category(category_id: int, db: AsyncSession = Depends(get_db)):
+    category = await db.get(Category, category_id)
+    if category is None: raise NotFoundError("Категория не найдена")
+    return category
+
 @router.patch("/{category_id}", response_model=CategoryResponse)
 async def update_category(category_id: int, payload: CategoryUpdate, admin: User = Depends(get_admin_user), db: AsyncSession = Depends(get_db)):
     category = await db.get(Category, category_id)

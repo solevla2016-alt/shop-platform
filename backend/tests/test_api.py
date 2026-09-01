@@ -205,6 +205,21 @@ async def test_categories_list_duplicate_not_found_and_delete_with_products(
 
     assert response.status_code == 201
 
+    created_id = response.json()["id"]
+
+    response = await client.get(
+        f"/api/v1/categories/{created_id}",
+    )
+
+    assert response.status_code == 200
+    assert response.json()["slug"] == "unique-category"
+
+    response = await client.get(
+        "/api/v1/categories/999999",
+    )
+
+    assert response.status_code == 404
+
     response = await client.post(
         "/api/v1/categories",
         json={
@@ -795,6 +810,54 @@ async def test_categories_update_conflict(
 
 
 @pytest.mark.asyncio
+async def test_categories_update_success_and_delete(
+    client: AsyncClient,
+    admin_headers: dict,
+):
+    created = await client.post(
+        "/api/v1/categories",
+        json={
+            "name": "Update Me",
+            "slug": "update-me",
+        },
+        headers=admin_headers,
+    )
+    assert created.status_code == 201
+    category_id = created.json()["id"]
+
+    response = await client.patch(
+        f"/api/v1/categories/{category_id}",
+        json={
+            "name": "Updated Name",
+            "icon": "🌿",
+            "description": "Обновлено",
+        },
+        headers=admin_headers,
+    )
+
+    assert response.status_code == 200
+    assert response.json()["name"] == "Updated Name"
+    assert response.json()["icon"] == "🌿"
+
+    fetched = await client.get(
+        f"/api/v1/categories/{category_id}",
+    )
+    assert fetched.status_code == 200
+    assert fetched.json()["name"] == "Updated Name"
+
+    deleted = await client.delete(
+        f"/api/v1/categories/{category_id}",
+        headers=admin_headers,
+    )
+    assert deleted.status_code == 204
+
+    not_found = await client.get(
+        f"/api/v1/categories/{category_id}",
+    )
+    assert not_found.status_code == 404
+
+
+@pytest.mark.asyncio
 async def test_product_create_invalid_category_and_put(
     client: AsyncClient,
     admin_headers: dict,
@@ -987,6 +1050,289 @@ async def test_checkout_rejects_inactive_product(
         },
         headers=admin_headers,
     )
+
+
+@pytest.mark.asyncio
+async def test_checkout_with_selected_products(
+    client: AsyncClient,
+    auth_headers: dict,
+    test_product,
+    db_session,
+):
+    from app.models.product import Product
+
+    second_product = Product(
+        name="Second Checkout Product",
+        price=2000,
+        is_active=True,
+        category_id=1,
+        sku="SECOND-CHECKOUT-PRODUCT",
+    )
+    db_session.add(second_product)
+    await db_session.commit()
+    await db_session.refresh(second_product)
+
+    cart = await client.post(
+        "/api/v1/cart/items",
+        json={
+            "items": [
+                {"product_id": test_product.id, "quantity": 1},
+                {"product_id": second_product.id, "quantity": 1},
+            ]
+        },
+        headers=auth_headers,
+    )
+    assert cart.status_code == 200
+
+    checkout = await client.post(
+        "/api/v1/orders/checkout",
+        headers=auth_headers,
+        json={"product_ids": [test_product.id]},
+    )
+
+    assert checkout.status_code == 201
+    assert checkout.json()["total_amount"] == 1000
+
+    item_ids = {
+        item["product_id"]
+        for item in checkout.json()["items"]
+    }
+    assert item_ids == {test_product.id}
+
+    remaining = await client.get(
+        "/api/v1/cart",
+        headers=auth_headers,
+    )
+    remaining_ids = {
+        item["product_id"]
+        for item in remaining.json()["items"]
+    }
+    assert remaining_ids == {second_product.id}
+
+    await client.delete(
+        "/api/v1/cart",
+        headers=auth_headers,
+    )
+
+
+@pytest.mark.asyncio
+async def test_checkout_with_unknown_product_ids_rejected(
+    client: AsyncClient,
+    auth_headers: dict,
+    test_product,
+):
+    await client.post(
+        "/api/v1/cart/items",
+        json={
+            "items": [{"product_id": test_product.id, "quantity": 1}]
+        },
+        headers=auth_headers,
+    )
+
+    result = await client.post(
+        "/api/v1/orders/checkout",
+        headers=auth_headers,
+        json={"product_ids": [999999]},
+    )
+
+    assert result.status_code == 400
+
+    await client.delete(
+        "/api/v1/cart",
+        headers=auth_headers,
+    )
+
+
+@pytest.mark.asyncio
+async def test_checkout_with_delivery(
+    client: AsyncClient,
+    auth_headers: dict,
+    test_product,
+):
+    await client.post(
+        "/api/v1/cart/items",
+        json={
+            "items": [{"product_id": test_product.id, "quantity": 1}]
+        },
+        headers=auth_headers,
+    )
+
+    result = await client.post(
+        "/api/v1/orders/checkout",
+        headers=auth_headers,
+        json={
+            "product_ids": [test_product.id],
+            "delivery_method": "delivery",
+            "delivery_cost": 500,
+            "delivery_address": "г. Москва, ул. Ленина, д. 1",
+            "recipient_name": "Иванов Иван Иванович",
+        },
+    )
+
+    assert result.status_code == 201
+
+    data = result.json()
+
+    assert data["delivery_method"] == "delivery"
+    assert data["delivery_cost"] == 500
+    assert data["recipient_name"] == "Иванов Иван Иванович"
+    assert data["total_amount"] == 1000 + 500
+
+
+@pytest.mark.asyncio
+async def test_checkout_delivery_requires_address_and_name(
+    client: AsyncClient,
+    auth_headers: dict,
+    test_product,
+):
+    await client.post(
+        "/api/v1/cart/items",
+        json={
+            "items": [{"product_id": test_product.id, "quantity": 1}]
+        },
+        headers=auth_headers,
+    )
+
+    result = await client.post(
+        "/api/v1/orders/checkout",
+        headers=auth_headers,
+        json={
+            "product_ids": [test_product.id],
+            "delivery_method": "delivery",
+        },
+    )
+
+    assert result.status_code == 400
+
+    await client.delete(
+        "/api/v1/cart",
+        headers=auth_headers,
+    )
+
+
+@pytest.mark.asyncio
+async def test_checkout_pickup_resets_delivery(
+    client: AsyncClient,
+    auth_headers: dict,
+    test_product,
+):
+    await client.post(
+        "/api/v1/cart/items",
+        json={
+            "items": [{"product_id": test_product.id, "quantity": 1}]
+        },
+        headers=auth_headers,
+    )
+
+    result = await client.post(
+        "/api/v1/orders/checkout",
+        headers=auth_headers,
+        json={
+            "product_ids": [test_product.id],
+            "delivery_method": "pickup",
+            "delivery_cost": 500,
+            "delivery_address": "г. Москва, ул. Ленина, д. 1",
+            "recipient_name": "Иванов Иван Иванович",
+        },
+    )
+
+    assert result.status_code == 201
+
+    data = result.json()
+
+    assert data["delivery_method"] == "pickup"
+    assert data["delivery_cost"] == 0
+    assert data["delivery_address"] is None
+    assert data["total_amount"] == 1000
+
+    await client.delete(
+        "/api/v1/cart",
+        headers=auth_headers,
+    )
+
+
+@pytest.mark.asyncio
+async def test_checkout_function_direct_selected(
+    db_session,
+    regular_user,
+):
+    from app.api.v1.orders import checkout
+    from app.models.cart import Cart, CartItem
+    from app.models.product import Product
+    from app.schemas.order import CheckoutRequest
+    from sqlalchemy import select
+
+    first = Product(name="Direct First", price=500, is_active=True, category_id=1, sku="DIRECT-FIRST")
+    second = Product(name="Direct Second", price=300, is_active=True, category_id=1, sku="DIRECT-SECOND")
+    db_session.add_all([first, second])
+    await db_session.flush()
+    cart = Cart(user_id=regular_user.id)
+    db_session.add(cart)
+    await db_session.flush()
+    db_session.add_all([
+        CartItem(cart_id=cart.id, product_id=first.id, quantity=2),
+        CartItem(cart_id=cart.id, product_id=second.id, quantity=1),
+    ])
+    await db_session.commit()
+
+    order = await checkout(
+        CheckoutRequest(product_ids=[first.id]),
+        regular_user,
+        db_session,
+    )
+
+    assert order.total_amount == 1000
+    assert len(order.items) == 1
+    assert order.items[0].product_name == "Direct First"
+
+    remaining = await db_session.scalar(
+        select(CartItem).where(CartItem.cart_id == cart.id)
+    )
+    assert remaining is not None
+    assert remaining.product_id == second.id
+
+
+@pytest.mark.asyncio
+async def test_checkout_function_direct_no_selection_keeps_full_cart(
+    db_session,
+    regular_user,
+):
+    from app.api.v1.orders import checkout
+    from app.models.cart import Cart, CartItem
+    from app.models.product import Product
+    from app.schemas.order import CheckoutRequest
+    from app.core.exceptions import BadRequestError
+    from sqlalchemy import select
+
+    product = Product(name="Direct Only", price=100, is_active=True, category_id=1, sku="DIRECT-ONLY")
+    db_session.add(product)
+    await db_session.flush()
+    cart = Cart(user_id=regular_user.id)
+    db_session.add(cart)
+    await db_session.flush()
+    db_session.add(CartItem(cart_id=cart.id, product_id=product.id, quantity=1))
+    await db_session.commit()
+
+    order = await checkout(
+        CheckoutRequest(product_ids=None),
+        regular_user,
+        db_session,
+    )
+
+    assert order.total_amount == 100
+    assert len(order.items) == 1
+
+    remaining = await db_session.scalars(
+        select(CartItem).where(CartItem.cart_id == cart.id)
+    )
+    assert len(remaining.all()) == 0
+
+    with pytest.raises(BadRequestError):
+        await checkout(
+            CheckoutRequest(product_ids=[]),
+            regular_user,
+            db_session,
+        )
 
 
 @pytest.mark.asyncio
@@ -1404,6 +1750,63 @@ async def test_products_sorting_and_pagination(
 
 
 @pytest.mark.asyncio
+async def test_products_filter_by_category(
+    client: AsyncClient,
+    db_session,
+):
+    from app.models.category import Category
+    from app.models.product import Product
+
+    import time
+
+    timestamp = time.time_ns()
+
+    extra_category = Category(
+        name=f"Extra {timestamp}",
+        slug=f"extra-{timestamp}",
+        description="Extra",
+        icon="🪴",
+    )
+    db_session.add(extra_category)
+    await db_session.commit()
+    await db_session.refresh(extra_category)
+
+    db_session.add_all([
+        Product(
+            name=f"Cat A {timestamp}",
+            price=100,
+            is_active=True,
+            category_id=1,
+            sku=f"CATA-{timestamp}",
+        ),
+        Product(
+            name=f"Cat B {timestamp}",
+            price=200,
+            is_active=True,
+            category_id=extra_category.id,
+            sku=f"CATB-{timestamp}",
+        ),
+    ])
+    await db_session.commit()
+
+    response = await client.get(
+        "/api/v1/products"
+        f"?category_id={extra_category.id}"
+        "&size=50"
+    )
+
+    assert response.status_code == 200
+
+    items = response.json()["items"]
+
+    assert items, "expected products to be returned"
+    assert all(
+        item["category_id"] == extra_category.id
+        for item in items
+    )
+
+
+@pytest.mark.asyncio
 async def test_product_get_not_found(
     client: AsyncClient,
 ):
@@ -1713,6 +2116,53 @@ async def test_upload_image_without_admin(
     )
 
     assert response.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_upload_image_empty_file(
+    client: AsyncClient,
+    admin_headers: dict,
+):
+    response = await client.post(
+        "/api/v1/uploads",
+        headers=admin_headers,
+        data={"folder": "categories"},
+        files={
+            "file": (
+                "empty.jpg",
+                b"",
+                "image/jpeg",
+            )
+        },
+    )
+
+    assert response.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_upload_image_too_large(
+    client: AsyncClient,
+    admin_headers: dict,
+):
+    from app.core.config import settings
+
+    max_bytes = settings.max_upload_size_bytes
+    big_file = b"\xff\xd8\xff\xe0" + b"0" * (max_bytes + 1)
+
+    response = await client.post(
+        "/api/v1/uploads",
+        headers=admin_headers,
+        data={"folder": "products"},
+        files={
+            "file": (
+                "big.jpg",
+                big_file,
+                "image/jpeg",
+            )
+        },
+    )
+
+    assert response.status_code == 400
 
 
 @pytest.mark.asyncio
