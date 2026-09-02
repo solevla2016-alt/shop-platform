@@ -1,6 +1,5 @@
 """Cart endpoints."""
 
-from typing import Dict, List
 
 from fastapi import APIRouter, Depends, Response, status
 from sqlalchemy import delete, select
@@ -40,7 +39,7 @@ async def build_cart_response(cart_id: int, db: AsyncSession) -> CartOut:
         .where(Cart.id == cart_id)
     )
 
-    items: List[CartItemOut] = []
+    items: list[CartItemOut] = []
     total = 0
 
     if cart:
@@ -112,7 +111,7 @@ async def add_cart_items(
     """Add products to cart."""
     cart = await get_or_create_cart(user.id, db)
 
-    quantities: Dict[int, int] = {}
+    quantities: dict[int, int] = {}
 
     for item in payload.items:
         quantities[item.product_id] = quantities.get(item.product_id, 0) + item.quantity
@@ -130,16 +129,17 @@ async def add_cart_items(
             )
         )
 
+        new_quantity = (
+            existing_item.quantity + quantity
+            if existing_item
+            else quantity
+        )
+        if new_quantity > 1000:
+            raise BadRequestError("Количество одного товара не может превышать 1000")
         if existing_item:
-            existing_item.quantity += quantity
+            existing_item.quantity = new_quantity
         else:
-            db.add(
-                CartItem(
-                    cart_id=cart.id,
-                    product_id=product_id,
-                    quantity=quantity,
-                )
-            )
+            db.add(CartItem(cart_id=cart.id, product_id=product_id, quantity=quantity))
 
     await db.commit()
 

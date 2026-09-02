@@ -39,9 +39,9 @@ class Cart(Base):
     )
 
     # ЭТОЙ СТРОКИ НЕ ХВАТАЛО:
-    user: Mapped["User"] = relationship("User", back_populates="cart")
+    user: Mapped[User] = relationship("User", back_populates="cart")
 
-    items: Mapped[list["CartItem"]] = relationship(
+    items: Mapped[list[CartItem]] = relationship(
         "CartItem",
         back_populates="cart",
         cascade="all, delete-orphan",
@@ -69,5 +69,5 @@ class CartItem(Base):
     )
     quantity: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
 
-    cart: Mapped["Cart"] = relationship("Cart", back_populates="items")
-    product: Mapped["Product"] = relationship("Product", back_populates="cart_items")
+    cart: Mapped[Cart] = relationship("Cart", back_populates="items")
+    product: Mapped[Product] = relationship("Product", back_populates="cart_items")

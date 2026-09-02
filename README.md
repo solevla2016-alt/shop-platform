@@ -1,87 +1,206 @@
-# 🌿 Green Garden E-commerce API
+# 🌿 Green Garden — e-commerce platform
 
-Полноценный backend-сервис для интернет-магазина живых растений, разработанный в соответствии с техническим заданием. Позволяет пользователям регистрироваться, авторизовываться, просматривать каталог товаров, управлять корзиной и оформлять заказы.
+Fullstack интернет-магазин растений на **FastAPI + PostgreSQL + SQLAlchemy + Alembic + vanilla JavaScript + Nginx + Docker Compose**.
 
-##  Технологический стек
+Проект подготовлен как коммерчески распространяемый шаблон: секреты не хранятся в репозитории, база создаётся миграциями, категории автоматически заполняются при первом запуске (на пустой базе, чтобы не восстанавливать удалённые пользователем), есть JWT access/refresh, корзина, заказы, админское управление товарами и заказами, восстановление пароля через Resend.
 
-- **Python 3.12** + **FastAPI** (асинхронный веб-фреймворк)
-- **PostgreSQL** (реляционная база данных)
-- **SQLAlchemy 2.0** (асинхронная ORM)
-- **Alembic** (управление миграциями БД)
-- **Pydantic** (валидация данных и сериализация)
-- **JWT** (аутентификация: access + refresh токены)
-- **Docker & Docker Compose** (контейнеризация)
-- **Pytest + pytest-cov** (тестирование с покрытием ≥ 75%)
-- **GitHub Actions** (CI/CD: линтинг flake8 и запуск тестов)
+## Возможности
 
-##  Структура проекта
+### Покупатель
+- регистрация по email и телефону с обязательным согласием на условия магазина и обработку персональных данных;
+- вход по email или телефону;
+- JWT access + refresh tokens с ротацией refresh token;
+- каталог с поиском, фильтрами, сортировкой и пагинацией;
+- корзина;
+- оформление заказа;
+- демонстрационная оплата: карта / СБП / наличные;
+- история заказов;
+- отмена неоплаченного заказа;
+- восстановление пароля по email.
 
-```text
-shop-platform/
-├── .env.example          # Пример переменных окружения
-├── .github/
-│   └── workflows/        # Конфигурация GitHub Actions (CI/CD)
-├── backend/
-│   ├── alembic/          # Миграции базы данных
-│   ├── app/
-│   │   ├── api/          # Маршруты (endpoints) и зависимости (deps)
-│   │   ├── core/         # Конфигурация, безопасность (JWT, хеширование), исключения
-│   │   ├── db/           # Настройки подключения к БД и базовые модели
-│   │   ├── models/       # SQLAlchemy модели (User, Product, Cart, Order)
-│   │   ├── schemas/      # Pydantic схемы для валидации запросов/ответов
-│   │   ├── scripts/      # Скрипты инициализации (создание админа)
-│   │   └── main.py       # Точка входа приложения FastAPI
-│   ├── frontend/         # Статический SPA-фронтенд (HTML, CSS, JS)
-│   ├── tests/            # Интеграционные и unit-тесты (pytest)
-│   ├── alembic.ini       # Конфигурация Alembic
-│   ├── Dockerfile        # Образ для backend-контейнера
-│   ├── requirements.txt  # Основные зависимости
-│   └── requirements-dev.txt # Зависимости для разработки и тестов
-├── docker-compose.yml    # Оркестрация контейнеров (API + PostgreSQL)
-└── README.md             # Этот файл
+### Администратор
+- создание, изменение и физическое удаление товаров (товар, который есть в заказах, удалить нельзя — его можно только деактивировать);
+- управление категориями через API;
+- просмотр всех заказов через API;
+- изменение статуса заказа;
+- просмотр неактивных товаров.
 
-    Быстрый старт (Docker)
-Клонируйте репозиторий и перейдите в папку проекта:
-   git clone <your-repo-url>
-   cd shop-platform
-Создайте файл окружения на основе примера:
-   cp .env.example .env
-(Убедитесь, что в .env заданы корректные данные для PostgreSQL и SECRET_KEY)
-Соберите и запустите контейнеры:
-   docker compose up --build
-Откройте в браузере:
-Фронтенд (Магазин): http://localhost:8080
-Swagger Документация API: http://localhost:8080/docs
-ReDoc Документация: http://localhost:8080/redoc
-Данные администратора по умолчанию создаются автоматически при первом запуске (указаны в .env).
+## Важное ограничение
 
-    Локальная разработка (без Docker)
-Создайте и активируйте виртуальное окружение:
-   cd backend
-   python -m venv venv
-   source venv/bin/activate  # Для Windows: venv\Scripts\activate
-Установите зависимости:
-pip install -r requirements.txt -r requirements-dev.txt
-Примените миграции и создайте админа:
-   alembic upgrade head
-   python -m app.scripts.create_admin
-Запустите сервер разработки:
-uvicorn app.main:app --reload
-(Фронтенд будет доступен на http://localhost:8000)
+Оплата в текущей версии **демонстрационная**. Реального эквайринга и списания денег нет. Перед запуском реального магазина необходимо подключить платёжного провайдера, настроить юридические документы, доставку, налоги и production-инфраструктуру.
 
-Тестирование и покрытие кода
-Проект покрыт тестами более чем на 75%. Для запуска тестов и проверки покрытия выполните:
+## Стек
+
+- Python 3.12+
+- FastAPI
+- SQLAlchemy 2.x async
+- PostgreSQL 16
+- Alembic
+- Pydantic v2
+- PyJWT
+- bcrypt
+- Resend HTTP API
+- Nginx
+- Docker Compose
+- Pytest / pytest-cov / flake8
+- GitHub Actions
+
+## Быстрый запуск через Docker
+
+Требуются Docker и Docker Compose.
+
+```bash
+git clone <your-repository>
+cd shop-platform
+cp .env.example .env
+```
+
+В `.env` обязательно задайте собственный `SECRET_KEY`, пароль PostgreSQL и production-параметры.
+
+Запуск:
+
+```bash
+docker compose up --build -d
+```
+
+После запуска:
+
+- магазин: `http://localhost:8080`
+- Swagger: `http://localhost:8080/docs`
+- ReDoc: `http://localhost:8080/redoc`
+- health check: `http://localhost:8080/health`
+
+Миграции и создание администратора выполняются автоматически контейнером API. Базовые категории добавляются автоматически только при пустой таблице категорий (при первом запуске).
+
+## Локальный запуск backend
+
+```bash
 cd backend
-pytest --cov=app --cov-report=term-missing
-Для проверки качества кода (PEP8):
-flake8 app tests
- Безопасность и валидация
-Пароли: хешируются алгоритмом bcrypt. Требуются: мин. 8 символов, только латиница, минимум 1 заглавная буква, минимум 1 спецсимвол ($, %, &, !, :).
-Телефон: строгая валидация формата (начинается с +7, далее ровно 10 цифр).
-Доступ к API: методы работы с товарами и корзиной защищены JWT-аутентификацией. При отсутствии токена возвращается ошибка 401 Unauthorized.
+python -m venv .venv
+```
 
-CI/CD (GitHub Actions)
-При каждом push в репозиторий автоматически запускается пайплайн, который:
-Проверяет код на соответствие PEP8 (flake8).
-Запускает набор тестов (pytest).
-Собирает Docker-образы для проверки корректности сборки.
+Windows:
+
+```powershell
+.venv\Scripts\activate
+```
+
+Linux/macOS:
+
+```bash
+source .venv/bin/activate
+```
+
+Установка:
+
+```bash
+pip install -r requirements.txt -r requirements-dev.txt
+```
+
+Создайте файл `.env` в корне проекта на основе `.env.example`, затем:
+
+```bash
+alembic upgrade head
+python -m app.scripts.seed_categories
+python -m app.scripts.create_admin
+uvicorn app.main:app --reload
+```
+
+## Переменные окружения
+
+Минимально необходимы:
+
+```env
+DATABASE_URL=postgresql+asyncpg://shop:password@localhost:5432/shop
+SECRET_KEY=<random-secret-at-least-32-characters>
+FRONTEND_URL=http://localhost:8080
+CORS_ORIGINS=http://localhost:8080
+```
+
+Для восстановления пароля:
+
+```env
+RESEND_API_KEY=<resend-api-key>
+EMAIL_FROM=Green Garden <noreply@example.com>
+PASSWORD_RESET_EXPIRE_MINUTES=15
+```
+
+Для автоматического создания администратора:
+
+```env
+ADMIN_EMAIL=admin@example.com
+ADMIN_PHONE=+79990000000
+ADMIN_PASSWORD=<strong-password>
+ADMIN_FULL_NAME=Store Administrator
+```
+
+**Файл `.env` нельзя публиковать или передавать покупателю с реальными секретами.**
+
+## Тесты
+
+```bash
+cd backend
+pytest -q
+```
+
+Покрытие:
+
+```bash
+pytest --cov=app --cov-report=term-missing
+```
+
+CI запускает линтинг, тесты и Docker build.
+
+## API
+
+Основные маршруты:
+
+| Метод | Endpoint | Назначение |
+|---|---|---|
+| POST | `/api/v1/auth/register` | Регистрация |
+| POST | `/api/v1/auth/login` | Вход |
+| POST | `/api/v1/auth/refresh` | Обновление токенов |
+| POST | `/api/v1/auth/forgot-password` | Запрос сброса пароля |
+| POST | `/api/v1/auth/reset-password` | Смена пароля по одноразовой ссылке |
+| GET | `/api/v1/products` | Каталог |
+| POST | `/api/v1/products` | Создание товара (admin) |
+| PATCH | `/api/v1/products/{id}` | Изменение товара (admin) |
+| DELETE | `/api/v1/products/{id}` | Удаление товара (admin); 409, если товар есть в заказах |
+| GET | `/api/v1/categories` | Категории |
+| POST | `/api/v1/cart/items` | Добавление в корзину |
+| GET | `/api/v1/cart` | Корзина |
+| POST | `/api/v1/orders/checkout` | Создание заказа |
+| POST | `/api/v1/orders/{id}/pay` | Демонстрационная оплата |
+| POST | `/api/v1/orders/{id}/cancel` | Отмена заказа |
+| GET | `/api/v1/orders` | Заказы пользователя |
+| GET | `/api/v1/orders/admin/all` | Все заказы (admin) |
+| PATCH | `/api/v1/orders/admin/{id}/status` | Изменение статуса (admin) |
+
+## Безопасность
+
+- `.env` исключён из Git;
+- access token проверяется как token типа `access`;
+- refresh token хранится на сервере по `jti` и ротируется;
+- reset token хранится только в виде SHA-256 hash и одноразово помечается использованным;
+- пароли хешируются bcrypt;
+- auth endpoints ограничены rate limiting;
+- validation errors корректно сериализуются;
+- публичные ошибки БД не раскрывают внутренние детали;
+- PostgreSQL не публикуется наружу через Docker Compose;
+- HTML-вывод frontend экранирует пользовательские данные.
+
+## Перед продажей / production
+
+1. Сгенерировать новый `SECRET_KEY`.
+2. Задать уникальные PostgreSQL credentials.
+3. Настроить домен и HTTPS.
+4. Настроить Resend и SPF/DKIM/DMARC.
+5. Подключить настоящий платёжный провайдер.
+6. Настроить резервное копирование PostgreSQL.
+7. Настроить внешний rate limiter/WAF для нескольких API-инстансов.
+8. Проверить юридические требования магазина и политики обработки персональных данных.
+9. Не использовать демонстрационные admin credentials.
+
+## Лицензирование и продажа
+
+Перед коммерческой продажей добавьте выбранную лицензию, реквизиты правообладателя и условия поддержки. Удалённые из дистрибутива `.git`, `.env`, тестовые базы и локальные кэши не являются частью продукта.
