@@ -32,6 +32,7 @@ const WISHLIST_KEY = "garden_wishlist";
 let currentOrderId = null;
 let selectedPaymentMethod = null;
 let allCategories = [];
+let adminOrdersRefreshTimer = null;
 
 
 /* ============================================================
@@ -650,6 +651,15 @@ function filterByCategory(categoryId) {
     showToast(
         `Категория: ${category ? category.name : categoryId}`
     );
+
+    const productsHeading = $("#products");
+
+    if (productsHeading) {
+        productsHeading.scrollIntoView({
+            behavior: "smooth",
+            block: "start",
+        });
+    }
 }
 
 
@@ -658,6 +668,11 @@ function filterByCategory(categoryId) {
    ============================================================ */
 
 function showView(name) {
+    if (adminOrdersRefreshTimer) {
+        clearInterval(adminOrdersRefreshTimer);
+        adminOrdersRefreshTimer = null;
+    }
+
     document
         .querySelectorAll(".view")
         .forEach((view) => view.classList.add("hidden"));
@@ -726,6 +741,12 @@ function showView(name) {
         loadAdminOrders().catch((error) => {
             showToast(error.message, "error");
         });
+
+        adminOrdersRefreshTimer = setInterval(() => {
+            loadAdminOrders().catch((error) => {
+                console.warn("Failed to refresh admin orders:", error);
+            });
+        }, 20000);
     }
 }
 
@@ -1704,6 +1725,12 @@ async function confirmCheckout() {
         showToast("Заказ успешно создан!");
 
         showView("orders");
+
+        if (state.user?.is_admin) {
+            loadAdminOrders().catch((error) => {
+                console.warn("Failed to refresh admin orders:", error);
+            });
+        }
     } catch (error) {
         showToast(error.message, "error");
     }
@@ -3044,6 +3071,12 @@ async function processPayment() {
         closePaymentModal();
 
         await loadOrders();
+
+        if (state.user?.is_admin) {
+            loadAdminOrders().catch((error) => {
+                console.warn("Failed to refresh admin orders:", error);
+            });
+        }
     } catch (error) {
         showToast(error.message, "error");
         closePaymentModal();
@@ -3125,6 +3158,8 @@ function initPasswordToggles() {
     document
         .querySelectorAll(".password-toggle")
         .forEach((button) => {
+            button.classList.remove("visible");
+
             button.addEventListener("click", (event) => {
                 event.preventDefault();
 
@@ -3138,13 +3173,17 @@ function initPasswordToggles() {
                     return;
                 }
 
-                if (input.type === "password") {
-                    input.type = "text";
-                    button.textContent = "🙈";
-                } else {
-                    input.type = "password";
-                    button.textContent = "👁️";
-                }
+                const showPassword =
+                    input.type === "password";
+
+                input.type = showPassword
+                    ? "text"
+                    : "password";
+
+                button.classList.toggle(
+                    "visible",
+                    showPassword
+                );
             });
         });
 }
@@ -3982,6 +4021,14 @@ function bindGlobalActions() {
                 }
 
                 if (
+                    action ===
+                    "reset-filters"
+                ) {
+                    resetFilters();
+                    return;
+                }
+
+                if (
                     action === "page-prev"
                 ) {
                     if (
@@ -4481,6 +4528,44 @@ function bindGlobalActions() {
 /* ============================================================
    FILTER EVENTS
    ============================================================ */
+
+function resetFilters() {
+    const fields = {
+        "#filter-name": "",
+        "#filter-min-price": "",
+        "#filter-max-price": "",
+        "#filter-sort-by": "name",
+        "#filter-sort-order": "asc",
+        "#product-category": "",
+    };
+
+    for (const [selector, defaultValue] of Object.entries(fields)) {
+        const element = $(selector);
+
+        if (element) {
+            element.value = defaultValue;
+        }
+    }
+
+    const inactive = $("#filter-include-inactive");
+
+    if (inactive) {
+        inactive.checked = false;
+    }
+
+    const wishlistOnly = $("#filter-wishlist-only");
+
+    if (wishlistOnly) {
+        wishlistOnly.checked = false;
+    }
+
+    state.productsPage = 1;
+
+    loadProducts().catch((error) => {
+        showToast(error.message, "error");
+    });
+}
+
 
 function bindFilterEvents() {
     const sortBy =

@@ -60,6 +60,7 @@ h4 { font-size: 20px; }
 .logo-icon { font-size: 32px; }
 .nav { display: flex; gap: 8px; }
 .nav-btn {
+  flex-shrink: 0;
   background: transparent;
   border: none;
   color: var(--text-secondary);
@@ -69,6 +70,7 @@ h4 { font-size: 20px; }
   transition: all 0.3s;
   font-size: 17px;
   font-weight: 500;
+  white-space: nowrap;
 }
 .nav-btn:hover { color: var(--text-primary); background: rgba(125, 216, 125, 0.1); }
 .nav-btn.active { color: var(--accent); background: rgba(125, 216, 125, 0.15); }
@@ -175,8 +177,11 @@ h4 { font-size: 20px; }
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: 24px;
   margin-bottom: 40px;
+  align-items: stretch;
 }
 .product-card {
+  display: flex;
+  flex-direction: column;
   background: var(--glass-bg);
   backdrop-filter: blur(20px);
   border: 1px solid var(--glass-border);
@@ -200,10 +205,19 @@ h4 { font-size: 20px; }
   font-size: 80px;
 }
 .product-card-header { padding: 20px; display: flex; justify-content: space-between; align-items: start; gap: 12px; }
-.product-name { font-size: 18px; font-weight: 600; flex: 1; }
+.product-name {
+  font-size: 18px;
+  font-weight: 600;
+  flex: 1;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  min-height: 2.4em;
+}
 .product-description { padding: 0 20px; color: var(--text-secondary); font-size: 14px; margin-bottom: 16px; }
 .product-price { padding: 0 20px 20px; font-size: 24px; font-weight: 700; color: var(--accent); }
-.product-card .btn { margin: 0 20px 20px; width: calc(100% - 40px); }
+.product-card .btn { margin: auto 20px 20px; width: calc(100% - 40px); }
 
 .badge {
   display: inline-block;
@@ -335,6 +349,29 @@ h4 { font-size: 20px; }
 .admin-form-card h3 { margin-bottom: 24px; }
 .admin-form { display: flex; flex-direction: column; gap: 20px; }
 .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.form-row .form-group { min-width: 0; }
+.form-group input[type="file"] {
+  padding: 8px 12px;
+  line-height: 1.2;
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+.form-group input[type="file"]::file-selector-button {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  padding: 8px 14px;
+  border-radius: var(--radius);
+  margin-right: 12px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 14px;
+  transition: all 0.3s;
+}
+.form-group input[type="file"]::file-selector-button:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
 .checkbox-group { flex-direction: row; align-items: center; }
 .checkbox-group label { display: flex; align-items: center; gap: 12px; cursor: pointer; }
 
@@ -606,8 +643,18 @@ h4 { font-size: 20px; }
 }
 
 @media (max-width: 768px) {
-  .header-content { padding: 16px 20px; flex-wrap: wrap; }
-  .nav { order: 3; width: 100%; justify-content: center; }
+  .header-content { padding: 16px 20px; flex-wrap: wrap; gap: 16px; }
+  .nav {
+    order: 3;
+    width: 100%;
+    justify-content: flex-start;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding-bottom: 4px;
+  }
+  .nav::-webkit-scrollbar { display: none; }
   .hero { padding: 60px 20px; }
   .hero-title { font-size: 40px; }
   .hero-stats { flex-direction: column; gap: 32px; }
@@ -621,8 +668,11 @@ h4 { font-size: 20px; }
 /* Reset password page */
 
 .password-wrapper { position: relative; display: flex; flex-direction: column; gap: 8px; }
-.password-toggle { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); background: none; border: none; color: var(--text-secondary); cursor: pointer; font-size: 18px; padding: 4px 8px; z-index: 2; }
+.password-toggle { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); background: none; border: none; color: var(--text-secondary); cursor: pointer; font-size: 18px; padding: 4px 8px; z-index: 2; display: flex; align-items: center; justify-content: center; }
 .password-toggle:hover { color: var(--accent); }
+.password-toggle .eye-slash { display: none; }
+.password-toggle.visible .eye-eye { display: none; }
+.password-toggle.visible .eye-slash { display: block; }
 .password-wrapper input { padding-right: 44px; }
 .forgot-password-link { text-align: right; margin-top: -8px; }
 .forgot-password-link a { color: var(--text-secondary); font-size: 13px; text-decoration: none; }
