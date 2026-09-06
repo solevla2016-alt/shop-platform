@@ -2457,9 +2457,7 @@ async function loadAdminOrders() {
     }
 
     const data = await apiFetch(
-        "/orders/admin/all",
-        {},
-        false
+        "/orders/admin/all"
     );
 
     const orders = Array.isArray(data)
@@ -3995,9 +3993,24 @@ function bindGlobalActions() {
                 if (
                     action === "nav-view"
                 ) {
-                    showView(
-                        target.dataset.view
-                    );
+                    const viewName =
+                        target.dataset.view;
+
+                    if (
+                        viewName === "catalog"
+                    ) {
+                        const wishlistFilter =
+                            $(
+                                "#filter-wishlist-only"
+                            );
+
+                        if (wishlistFilter) {
+                            wishlistFilter.checked =
+                                false;
+                        }
+                    }
+
+                    showView(viewName);
                     return;
                 }
 
