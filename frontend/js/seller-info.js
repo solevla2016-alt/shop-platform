@@ -6,6 +6,6 @@ window.SELLER_INFO = {
     address: "[Юридический адрес будет вписан]",
     email: "[email продавца будет вписан]",
     phone: "+7 978 747-18-67",
-    siteUrl: "greengarden.shop",
+    siteUrl: "greengardencrimea.duckdns.org:8080",
     bankName: "Сбер",
 };
