@@ -9,6 +9,7 @@ class OrderItemOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     product_id: int
     product_name: str
+    product_sku: str | None = None
     price: int
     quantity: int
     subtotal: int
@@ -19,6 +20,7 @@ class OrderOut(BaseModel):
     id: int
     user_id: int
     status: str
+    shipping_status: str | None = None
     payment_method: str | None = None
     total_amount: int
     delivery_method: str | None = None
@@ -37,6 +39,10 @@ class PaymentRequest(BaseModel):
 
 class OrderStatusUpdate(BaseModel):
     status: Literal["pending_payment", "paid", "cancelled"]
+
+
+class ShippingStatusUpdate(BaseModel):
+    shipping_status: Literal["sorting", "ready", "shipped"]
 
 
 class CheckoutRequest(BaseModel):

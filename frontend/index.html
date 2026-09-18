@@ -16,6 +16,7 @@
                 <button class="nav-btn" data-action="show-wishlist">Избранное <span id="wishlist-badge" class="cart-badge badge-hidden">0</span></button>
                 <button class="nav-btn" data-action="nav-view" data-view="orders">Заказы</button>
                 <button class="nav-btn hidden" data-action="nav-view" data-view="admin" id="admin-nav">Админ</button>
+                <button class="nav-btn hidden" data-action="nav-view" data-view="admin-orders" id="admin-orders-nav">Оформленные заказы</button>
                 <button class="nav-btn" data-action="logout">Выйти</button>
             </nav>
             <div id="user-box" class="user-box hidden">
@@ -232,12 +233,14 @@
             </div>
             <h3>Список категорий</h3>
             <div id="admin-categories"></div>
+        </div>
+    </div>
 
-            <div class="admin-form-card" style="margin-top: 32px;">
-                <h3>Заказы</h3>
-                <div id="admin-orders-stats" class="admin-stats"></div>
-                <div id="admin-orders"></div>
-            </div>
+    <div id="view-admin-orders" class="view hidden">
+        <div class="container">
+            <h2 class="section-title">Оформленные заказы</h2>
+            <div id="admin-orders-stats" class="admin-stats"></div>
+            <div id="admin-orders"></div>
         </div>
     </div>
 

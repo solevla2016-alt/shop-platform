@@ -23,6 +23,10 @@ class Order(Base):
         default="pending_payment",
         nullable=False,
     )
+    shipping_status: Mapped[str | None] = mapped_column(
+        String(20),
+        nullable=True,
+    )
     payment_method: Mapped[str | None] = mapped_column(String(50), nullable=True)
     total_amount: Mapped[int] = mapped_column(Integer, nullable=False)
     delivery_method: Mapped[str | None] = mapped_column(String(20), nullable=True)
@@ -74,6 +78,7 @@ class OrderItem(Base):
         nullable=False,
     )
     product_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    product_sku: Mapped[str | None] = mapped_column(String(50), nullable=True)
     price: Mapped[int] = mapped_column(Integer, nullable=False)
     quantity: Mapped[int] = mapped_column(Integer, nullable=False)
     subtotal: Mapped[int] = mapped_column(Integer, nullable=False)

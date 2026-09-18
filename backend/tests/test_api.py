@@ -2214,3 +2214,143 @@ async def test_get_db_dependency_yields_session():
         assert Base is not None
         assert session is not None
         break
+
+
+@pytest.mark.asyncio
+async def test_checkout_item_contains_sku(
+    client: AsyncClient,
+    auth_headers: dict,
+    test_product,
+):
+    await client.post(
+        "/api/v1/cart/items",
+        json={
+            "items": [
+                {
+                    "product_id": test_product.id,
+                    "quantity": 2,
+                }
+            ]
+        },
+        headers=auth_headers,
+    )
+
+    order = (
+        await client.post(
+            "/api/v1/orders/checkout",
+            headers=auth_headers,
+        )
+    ).json()
+
+    assert order["status"] == "pending_payment"
+    assert order["shipping_status"] is None
+    assert len(order["items"]) == 1
+    assert order["items"][0]["product_sku"] == test_product.sku
+
+
+@pytest.mark.asyncio
+async def test_admin_processed_orders_and_shipping_status(
+    client: AsyncClient,
+    auth_headers: dict,
+    admin_headers: dict,
+    test_product,
+):
+    await client.post(
+        "/api/v1/cart/items",
+        json={
+            "items": [
+                {
+                    "product_id": test_product.id,
+                    "quantity": 1,
+                }
+            ]
+        },
+        headers=auth_headers,
+    )
+
+    order = (
+        await client.post(
+            "/api/v1/orders/checkout",
+            headers=auth_headers,
+        )
+    ).json()
+
+    order_id = order["id"]
+
+    paid = (
+        await client.post(
+            f"/api/v1/orders/{order_id}/pay",
+            json={"payment_method": "card"},
+            headers=auth_headers,
+        )
+    ).json()
+
+    assert paid["status"] == "paid"
+    assert paid["shipping_status"] == "sorting"
+
+    processed = await client.get(
+        "/api/v1/orders/admin/processed",
+        headers=admin_headers,
+    )
+
+    assert processed.status_code == 200
+    ids = [o["id"] for o in processed.json()]
+    assert order_id in ids
+
+    target = next(
+        o for o in processed.json() if o["id"] == order_id
+    )
+    assert target["shipping_status"] == "sorting"
+
+    updated = await client.patch(
+        f"/api/v1/orders/admin/{order_id}/shipping-status",
+        json={"shipping_status": "shipped"},
+        headers=admin_headers,
+    )
+
+    assert updated.status_code == 200
+    assert updated.json()["shipping_status"] == "shipped"
+
+    response = await client.patch(
+        f"/api/v1/orders/admin/{order_id}/shipping-status",
+        json={"shipping_status": "shipped"},
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_admin_shipping_status_requires_paid_order(
+    client: AsyncClient,
+    auth_headers: dict,
+    admin_headers: dict,
+    test_product,
+):
+    await client.post(
+        "/api/v1/cart/items",
+        json={
+            "items": [
+                {
+                    "product_id": test_product.id,
+                    "quantity": 1,
+                }
+            ]
+        },
+        headers=auth_headers,
+    )
+
+    order = (
+        await client.post(
+            "/api/v1/orders/checkout",
+            headers=auth_headers,
+        )
+    ).json()
+
+    response = await client.patch(
+        f"/api/v1/orders/admin/{order['id']}/shipping-status",
+        json={"shipping_status": "ready"},
+        headers=admin_headers,
+    )
+
+    assert response.status_code == 400

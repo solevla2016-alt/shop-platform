@@ -737,14 +737,22 @@ function showView(name) {
         loadAdminCategories().catch((error) => {
             showToast(error.message, "error");
         });
+    }
 
-        loadAdminOrders().catch((error) => {
+    if (name === "admin-orders") {
+        if (!state.user?.is_admin) {
+            showToast("Доступ запрещён.", "error");
+            showView("catalog");
+            return;
+        }
+
+        loadProcessedOrders().catch((error) => {
             showToast(error.message, "error");
         });
 
         adminOrdersRefreshTimer = setInterval(() => {
-            loadAdminOrders().catch((error) => {
-                console.warn("Failed to refresh admin orders:", error);
+            loadProcessedOrders().catch((error) => {
+                console.warn("Failed to refresh processed orders:", error);
             });
         }, 20000);
     }
@@ -807,6 +815,7 @@ function renderNav() {
     const guestLoginButton = $("#guest-login-btn");
     const userName = $("#user-name");
     const adminNav = $("#admin-nav");
+    const adminOrdersNav = $("#admin-orders-nav");
     const inactiveFilter = $("#inactive-filter");
 
     if (nav) nav.classList.remove("hidden");
@@ -819,6 +828,13 @@ function renderNav() {
 
     if (adminNav) {
         adminNav.classList.toggle(
+            "hidden",
+            !state.user.is_admin
+        );
+    }
+
+    if (adminOrdersNav) {
+        adminOrdersNav.classList.toggle(
             "hidden",
             !state.user.is_admin
         );
@@ -1727,8 +1743,8 @@ async function confirmCheckout() {
         showView("orders");
 
         if (state.user?.is_admin) {
-            loadAdminOrders().catch((error) => {
-                console.warn("Failed to refresh admin orders:", error);
+            loadProcessedOrders().catch((error) => {
+                console.warn("Failed to refresh processed orders:", error);
             });
         }
     } catch (error) {
@@ -2299,11 +2315,10 @@ async function loadAdminCategories() {
    ============================================================ */
 
 function adminOrderCard(order) {
-    const statusText = {
-        pending_payment: "Ожидает оплаты",
-        paid: "Оплачен",
-        cancelled: "Отменён",
-        created: "Создан",
+    const shippingStatusText = {
+        sorting: "На сортировке",
+        ready: "Готов к отправке",
+        shipped: "Отправлен",
     };
 
     const items = Array.isArray(order.items)
@@ -2317,58 +2332,80 @@ function adminOrderCard(order) {
               )})`
             : "Самовывоз";
 
+    const itemsHtml = items.length
+        ? items
+              .map(
+                  (item) => `
+            <div class="admin-order-item">
+                <div class="admin-order-item-name">
+                    ${escapeHtml(item.product_name)}
+                </div>
+                <div class="admin-order-item-sku">
+                    Арт. ${escapeHtml(
+                        item.product_sku || "—"
+                    )}
+                </div>
+                <div class="admin-order-item-qty">
+                    ${Number(item.quantity)} шт.
+                </div>
+                <div class="admin-order-item-price">
+                    ${formatMoney(item.subtotal)}
+                </div>
+            </div>
+        `
+              )
+              .join("")
+        : `<div class="muted">Товаров нет</div>`;
+
     return `
-        <div class="admin-order-row">
-            <div class="admin-order-main">
+        <div class="admin-order-card">
+            <div class="admin-order-card-head">
                 <div class="admin-order-title">
                     Заказ #${Number(order.id)}
                 </div>
-
                 <div class="muted">
                     ${formatDate(order.created_at)}
                 </div>
-
                 <div class="admin-order-user">
                     Пользователь #${Number(order.user_id)}
                 </div>
-            </div>
-
-            <div class="admin-order-info">
-                <div>
-                    Товаров: ${items.length}
-                </div>
                 <div>${deliveryText}</div>
+                <div class="admin-order-total">
+                    Сумма: ${formatMoney(order.total_amount)}
+                </div>
             </div>
 
-            <div class="admin-order-total">
-                ${formatMoney(order.total_amount)}
+            <div class="admin-order-items">
+                ${itemsHtml}
             </div>
 
-            <div class="admin-order-status">
+            <div class="admin-order-card-foot">
                 <span class="status-badge ${
-                    statusClassFor(order.status)
+                    shippingClassFor(order.shipping_status)
                 }">
                     ${escapeHtml(
-                        statusText[order.status] || order.status
+                        shippingStatusText[
+                            order.shipping_status
+                        ] || "На сортировке"
                     )}
                 </span>
 
                 <select
                     class="admin-status-select"
-                    data-action="admin-change-status"
+                    data-action="admin-change-shipping-status"
                     data-id="${Number(order.id)}"
                 >
-                    <option value="pending_payment"
-                        ${order.status === "pending_payment" ? "selected" : ""}>
-                        Ожидает оплаты
+                    <option value="sorting"
+                        ${order.shipping_status === "sorting" || !order.shipping_status ? "selected" : ""}>
+                        На сортировке
                     </option>
-                    <option value="paid"
-                        ${order.status === "paid" ? "selected" : ""}>
-                        Оплачен
+                    <option value="ready"
+                        ${order.shipping_status === "ready" ? "selected" : ""}>
+                        Готов к отправке
                     </option>
-                    <option value="cancelled"
-                        ${order.status === "cancelled" ? "selected" : ""}>
-                        Отменён
+                    <option value="shipped"
+                        ${order.shipping_status === "shipped" ? "selected" : ""}>
+                        Отправлен
                     </option>
                 </select>
             </div>
@@ -2377,16 +2414,31 @@ function adminOrderCard(order) {
 }
 
 
-function statusClassFor(status) {
-    if (status === "paid") {
+function shippingClassFor(shippingStatus) {
+    if (shippingStatus === "shipped") {
         return "paid";
     }
 
-    if (status === "cancelled") {
-        return "cancelled";
+    if (shippingStatus === "ready") {
+        return "ready";
     }
 
     return "pending";
+}
+
+
+async function adminChangeShippingStatus(orderId, shippingStatus) {
+    await apiFetch(
+        `/orders/admin/${Number(orderId)}/shipping-status`,
+        {
+            method: "PATCH",
+            body: JSON.stringify({ shipping_status: shippingStatus }),
+        }
+    );
+
+    showToast("Статус отгрузки обновлён");
+
+    await loadProcessedOrders();
 }
 
 
@@ -2442,7 +2494,7 @@ function renderAdminOrderStats(orders) {
 }
 
 
-async function loadAdminOrders() {
+async function loadProcessedOrders() {
     const container = $("#admin-orders");
     const statsElement = $("#admin-orders-stats");
 
@@ -2457,7 +2509,7 @@ async function loadAdminOrders() {
     }
 
     const data = await apiFetch(
-        "/orders/admin/all"
+        "/orders/admin/processed"
     );
 
     const orders = Array.isArray(data)
@@ -2474,24 +2526,9 @@ async function loadAdminOrders() {
                 color: var(--text-secondary);
                 padding: 20px;
             ">
-                Заказов нет
+                Оформленных заказов нет
             </p>
         `;
-}
-
-
-async function adminChangeOrderStatus(orderId, status) {
-    await apiFetch(
-        `/orders/admin/${Number(orderId)}/status`,
-        {
-            method: "PATCH",
-            body: JSON.stringify({ status }),
-        }
-    );
-
-    showToast("Статус заказа обновлён");
-
-    await loadAdminOrders();
 }
 
 
@@ -3071,8 +3108,8 @@ async function processPayment() {
         await loadOrders();
 
         if (state.user?.is_admin) {
-            loadAdminOrders().catch((error) => {
-                console.warn("Failed to refresh admin orders:", error);
+            loadProcessedOrders().catch((error) => {
+                console.warn("Failed to refresh processed orders:", error);
             });
         }
     } catch (error) {
@@ -4498,7 +4535,7 @@ function bindGlobalActions() {
         "change",
         async (event) => {
             const select = event.target.closest(
-                "[data-action='admin-change-status']"
+                "[data-action='admin-change-shipping-status']"
             );
 
             if (!select) {
@@ -4513,12 +4550,12 @@ function bindGlobalActions() {
                 return;
             }
 
-            const status = select.value;
+            const shippingStatus = select.value;
 
             try {
-                await adminChangeOrderStatus(
+                await adminChangeShippingStatus(
                     orderId,
-                    status
+                    shippingStatus
                 );
             } catch (error) {
                 select.value =
@@ -4531,7 +4568,7 @@ function bindGlobalActions() {
                     "error"
                 );
 
-                await loadAdminOrders();
+                await loadProcessedOrders();
             }
         }
     );

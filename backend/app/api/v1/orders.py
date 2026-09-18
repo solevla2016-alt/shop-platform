@@ -17,10 +17,17 @@ from app.schemas.order import (
     OrderOut,
     OrderStatusUpdate,
     PaymentRequest,
+    ShippingStatusUpdate,
 )
 
 
 router = APIRouter(tags=["Orders"])
+
+SHIPPING_STATUS_TEXT = {
+    "sorting": "На сортировке",
+    "ready": "Готов к отправке",
+    "shipped": "Отправлен",
+}
 
 
 async def load_order(order_id: int, db: AsyncSession) -> Order | None:
@@ -74,6 +81,7 @@ async def checkout(
             OrderItem(
                 product_id=product.id,
                 product_name=product.name,
+                product_sku=product.sku,
                 price=product.price,
                 quantity=item.quantity,
                 subtotal=subtotal,
@@ -157,6 +165,7 @@ async def pay_order(
 
     order.status = "paid"
     order.payment_method = payload.payment_method
+    order.shipping_status = order.shipping_status or "sorting"
     order.paid_at = datetime.now(timezone.utc)
     await db.commit()
 
@@ -231,6 +240,7 @@ async def admin_update_order_status(
 
     if payload.status == "paid" and order.paid_at is None:
         order.paid_at = datetime.now(timezone.utc)
+        order.shipping_status = order.shipping_status or "sorting"
 
     if payload.status != "paid":
         order.paid_at = None
@@ -241,7 +251,47 @@ async def admin_update_order_status(
     return await load_order(order.id, db)
 
 
-@router.get("/{order_id}", response_model=OrderOut)
+@router.get("/admin/processed", response_model=list[OrderOut])
+async def admin_processed_orders(
+    admin: User = Depends(get_admin_user),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.scalars(
+        select(Order)
+        .options(selectinload(Order.items))
+        .where(Order.status == "paid")
+        .order_by(Order.created_at.desc())
+    )
+    return result.all()
+
+
+@router.patch(
+    "/admin/{order_id}/shipping-status",
+    response_model=OrderOut,
+)
+async def admin_update_shipping_status(
+    order_id: int,
+    payload: ShippingStatusUpdate,
+    admin: User = Depends(get_admin_user),
+    db: AsyncSession = Depends(get_db),
+):
+    order = await load_order(order_id, db)
+
+    if order is None:
+        raise NotFoundError("Заказ не найден")
+
+    if order.status != "paid":
+        raise BadRequestError(
+            "Изменить статус отгрузки можно только у оплаченного заказа"
+        )
+
+    order.shipping_status = payload.shipping_status
+    await db.commit()
+
+    return await load_order(order.id, db)
+
+
+@router.get("/admin/{order_id}", response_model=OrderOut)
 async def get_order(
     order_id: int,
     user: User = Depends(get_current_user),
