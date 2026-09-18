@@ -63,6 +63,7 @@ if os.path.exists(FRONTEND_DIR):
     js_dir = os.path.join(FRONTEND_DIR, "js")
     css_dir = os.path.join(FRONTEND_DIR, "css")
     images_dir = os.path.join(FRONTEND_DIR, "images")
+    legal_dir = os.path.join(FRONTEND_DIR, "legal")
 
     if os.path.exists(js_dir):
         app.mount(
@@ -83,6 +84,13 @@ if os.path.exists(FRONTEND_DIR):
             "/images",
             StaticFiles(directory=images_dir),
             name="images",
+        )
+
+    if os.path.exists(legal_dir):
+        app.mount(
+            "/legal",
+            StaticFiles(directory=legal_dir),
+            name="legal",
         )
 
 

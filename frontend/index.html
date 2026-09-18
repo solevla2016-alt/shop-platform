@@ -93,7 +93,7 @@
                     <div class="form-group checkbox-group consent-group">
                         <label class="consent-label">
                             <input type="checkbox" id="register-consent">
-                            <span>При регистрации в приложении вы соглашаетесь с условиями магазина и даёте согласие на обработку персональных данных</span>
+                            <span>При регистрации в приложении вы соглашаетесь с <a href="#" data-action="nav-view" data-view="oferta">условиями магазина</a> и даёте <a href="#" data-action="nav-view" data-view="privacy">согласие на обработку персональных данных</a></span>
                         </label>
                     </div>
                     <button type="submit" class="btn btn-primary btn-block">Создать аккаунт</button>
@@ -280,6 +280,41 @@
         </div>
     </div>
 
+    <div id="view-oferta" class="view hidden">
+        <div class="container legal-page">
+            <button class="btn btn-secondary btn-sm legal-back" data-action="nav-view" data-view="catalog">← Назад к каталогу</button>
+            <article class="legal-content" id="legal-content-oferta"></article>
+        </div>
+    </div>
+
+    <div id="view-privacy" class="view hidden">
+        <div class="container legal-page">
+            <button class="btn btn-secondary btn-sm legal-back" data-action="nav-view" data-view="catalog">← Назад к каталогу</button>
+            <article class="legal-content" id="legal-content-privacy"></article>
+        </div>
+    </div>
+
+    <footer class="site-footer">
+        <div class="footer-inner">
+            <div class="footer-col">
+                <div class="footer-title">Покупателям</div>
+                <a href="#" data-action="nav-view" data-view="oferta">Договор публичной оферты</a>
+                <a href="#" data-action="nav-view" data-view="privacy">Соглашение об обработке персональных данных</a>
+            </div>
+            <div class="footer-col">
+                <div class="footer-title">Продавец</div>
+                <div id="footer-seller" class="footer-seller"></div>
+            </div>
+            <div class="footer-col">
+                <div class="footer-title">Оплата и связь</div>
+                <div class="footer-contact" id="footer-contact"></div>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            <span>© 2026 Green Garden. Все права защищены.</span>
+        </div>
+    </footer>
+
     <div id="resetModal" class="modal-overlay hidden">
         <div class="modal">
             <span class="close" data-action="close-reset-modal">&times;</span>
@@ -293,7 +328,7 @@
                 <button type="button" class="btn btn-primary btn-block" data-action="request-reset">Получить токен</button>
             </div>
             <div id="reset-step-2" class="reset-step hidden">
-                <div class="reset-info">💡 В учебном проекте токен отображается в консоли сервера.</div>
+                <div class="reset-info">💡 Мы отправили письмо со ссылкой для сброса пароля. Проверьте почту (и папку «Спам»). Либо вставьте токен из письма вручную.</div>
                 <div class="form-group">
                     <label>Токен сброса</label>
                     <input type="text" id="reset-token">
@@ -315,6 +350,7 @@
     </div>
 
     <script src="/js/vendor/qrcode.min.js"></script>
+    <script src="/js/seller-info.js"></script>
     <script src="/js/app.js"></script>
 </body>
 </html>

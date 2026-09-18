@@ -756,6 +756,113 @@ function showView(name) {
             });
         }, 20000);
     }
+
+    if (name === "oferta" || name === "privacy") {
+        loadLegalPage(name).catch((error) => {
+            showToast(error.message, "error");
+        });
+    }
+}
+
+
+async function loadLegalPage(name) {
+    const container = $(
+        `#legal-content-${name}`
+    );
+
+    if (!container) {
+        return;
+    }
+
+    if (
+        container.dataset.loaded === "true"
+    ) {
+        applySellerFields(container);
+        return;
+    }
+
+    container.innerHTML = `
+        <div class="payment-processing">
+            <div class="spinner"></div>
+            <p>Загрузка документа...</p>
+        </div>
+    `;
+
+    const response = await fetch(
+        `/legal/${name}.html`
+    );
+
+    if (!response.ok) {
+        throw new Error(
+            "Не удалось загрузить документ."
+        );
+    }
+
+    container.innerHTML =
+        await response.text();
+
+    container.dataset.loaded = "true";
+
+    applySellerFields(container);
+}
+
+
+function applySellerFields(root) {
+    const info = window.SELLER_INFO;
+
+    if (!info) {
+        return;
+    }
+
+    const scope = root || document;
+
+    scope
+        .querySelectorAll("[data-seller]")
+        .forEach((element) => {
+            const key = element.dataset.seller;
+
+            const value = info[key];
+
+            if (
+                value !== undefined &&
+                value !== null &&
+                value !== ""
+            ) {
+                element.textContent = value;
+            }
+        });
+}
+
+
+function renderSellerInfo() {
+    const info = window.SELLER_INFO;
+
+    if (!info) {
+        return;
+    }
+
+    const sellerBox = $("#footer-seller");
+
+    if (sellerBox) {
+        sellerBox.innerHTML = `
+            <div>${escapeHtml(info.orgName)}</div>
+            <div>ИНН: ${escapeHtml(info.inn)}</div>
+            <div>ОГРНИП: ${escapeHtml(info.ogrn)}</div>
+            <div>${escapeHtml(info.address)}</div>
+        `;
+    }
+
+    const contactBox = $("#footer-contact");
+
+    if (contactBox) {
+        contactBox.innerHTML = `
+            <div>Телефон: ${escapeHtml(info.phone)}</div>
+            <div>Email: ${escapeHtml(info.email)}</div>
+            <div>Оплата: карта, СБП (${escapeHtml(
+                info.bankName
+            )}), наличные</div>
+        `;
+    }
 }
 
 
@@ -4878,6 +4985,7 @@ async function init() {
         initPasswordToggles();
         bindCategorySlugAutofill();
         updateWishlistBadge();
+        renderSellerInfo();
 
         await loadCategories();
 
