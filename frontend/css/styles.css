@@ -743,4 +743,53 @@ h4 { font-size: 20px; }
     margin-bottom: 32px;
 }
 
+/* Product stock */
+
+.product-stock {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent);
+  margin-top: 4px;
+}
+.product-stock.low { color: #fcd34d; }
+.product-stock.out { color: var(--text-secondary); }
+
+/* Payment QR */
+
+.payment-qr {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  margin-top: 18px;
+  padding: 18px;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius);
+  background: var(--bg-secondary);
+}
+#payment-qr-canvas {
+  padding: 8px;
+  background: #fff;
+  border-radius: 10px;
+}
+#payment-qr-canvas img,
+#payment-qr-canvas canvas {
+  display: block;
+  max-width: 100%;
+}
+.payment-qr-info {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  font-size: 14px;
+  color: var(--text-primary);
+}
+.payment-qr-hint {
+  font-size: 13px;
+  color: var(--text-secondary);
+  text-align: center;
+  max-width: 300px;
+}
+
 

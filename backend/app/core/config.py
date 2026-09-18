@@ -44,6 +44,8 @@ class Settings(BaseSettings):
         )
 
     frontend_url: str = "http://localhost:8080"
+    sbp_phone: str = "+79787471867"
+    sbp_bank_name: str = "Сбер"
     resend_api_key: str = ""
     email_from: str = ""
     password_reset_expire_minutes: int = Field(default=15, ge=5, le=60)

@@ -1065,6 +1065,7 @@ async def test_checkout_with_selected_products(
     second_product = Product(
         name="Second Checkout Product",
         price=2000,
+        stock_quantity=100,
         is_active=True,
         category_id=1,
         sku="SECOND-CHECKOUT-PRODUCT",
@@ -1266,6 +1267,7 @@ async def test_checkout_function_direct_selected(
     first = Product(
         name="Direct First",
         price=500,
+        stock_quantity=100,
         is_active=True,
         category_id=1,
         sku="DIRECT-FIRST",
@@ -1273,6 +1275,7 @@ async def test_checkout_function_direct_selected(
     second = Product(
         name="Direct Second",
         price=300,
+        stock_quantity=100,
         is_active=True,
         category_id=1,
         sku="DIRECT-SECOND",
@@ -1320,6 +1323,7 @@ async def test_checkout_function_direct_no_selection_keeps_full_cart(
     product = Product(
         name="Direct Only",
         price=100,
+        stock_quantity=100,
         is_active=True,
         category_id=1,
         sku="DIRECT-ONLY",
@@ -2354,3 +2358,276 @@ async def test_admin_shipping_status_requires_paid_order(
     )
 
     assert response.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_checkout_rejects_insufficient_stock(
+    client: AsyncClient,
+    auth_headers: dict,
+    db_session,
+    regular_user,
+):
+    from app.models.cart import Cart, CartItem
+    from app.models.product import Product
+
+    low = Product(
+        name="Low Stock",
+        price=500,
+        stock_quantity=1,
+        is_active=True,
+        category_id=1,
+        sku="LOW-STOCK",
+    )
+    db_session.add(low)
+    await db_session.commit()
+    await db_session.refresh(low)
+
+    cart = Cart(user_id=regular_user.id)
+    db_session.add(cart)
+    await db_session.flush()
+    db_session.add(
+        CartItem(cart_id=cart.id, product_id=low.id, quantity=2)
+    )
+    await db_session.commit()
+
+    response = await client.post(
+        "/api/v1/orders/checkout",
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 400
+    assert "на складе" in response.json()["message"]
+
+
+@pytest.mark.asyncio
+async def test_checkout_rejects_insufficient_stock_via_api(
+    client: AsyncClient,
+    auth_headers: dict,
+    db_session,
+):
+    from app.models.product import Product
+
+    low = Product(
+        name="Low Stock API",
+        price=900,
+        stock_quantity=0,
+        is_active=True,
+        category_id=1,
+        sku="LOW-STOCK-API",
+    )
+    db_session.add(low)
+    await db_session.commit()
+    await db_session.refresh(low)
+
+    added = await client.post(
+        "/api/v1/cart/items",
+        json={
+            "items": [
+                {
+                    "product_id": low.id,
+                    "quantity": 1,
+                }
+            ]
+        },
+        headers=auth_headers,
+    )
+    assert added.status_code == 200
+
+    response = await client.post(
+        "/api/v1/orders/checkout",
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 400
+    assert "на складе" in response.json()["message"]
+
+
+@pytest.mark.asyncio
+async def test_pay_decrements_stock_and_cancel_restores(
+    client: AsyncClient,
+    auth_headers: dict,
+    db_session,
+    test_product,
+):
+    stock_before = test_product.stock_quantity
+
+    await client.post(
+        "/api/v1/cart/items",
+        json={
+            "items": [
+                {
+                    "product_id": test_product.id,
+                    "quantity": 2,
+                }
+            ]
+        },
+        headers=auth_headers,
+    )
+
+    order = (
+        await client.post(
+            "/api/v1/orders/checkout",
+            headers=auth_headers,
+        )
+    ).json()
+
+    paid = await client.post(
+        f"/api/v1/orders/{order['id']}/pay",
+        json={"payment_method": "card"},
+        headers=auth_headers,
+    )
+    assert paid.status_code == 200
+
+    from sqlalchemy import select
+    from app.models.product import Product
+
+    after_paid = await db_session.scalar(
+        select(Product).where(Product.id == test_product.id)
+    )
+    assert after_paid.stock_quantity == stock_before - 2
+
+    cancelled = await client.post(
+        f"/api/v1/orders/{order['id']}/cancel",
+        headers=auth_headers,
+    )
+    assert cancelled.status_code == 400
+
+    await db_session.refresh(test_product)
+    assert test_product.stock_quantity == stock_before - 2
+
+
+@pytest.mark.asyncio
+async def test_admin_status_transitions_adjust_stock(
+    client: AsyncClient,
+    auth_headers: dict,
+    admin_headers: dict,
+    test_product,
+    db_session,
+):
+    from sqlalchemy import select
+    from app.models.product import Product
+
+    stock_before = test_product.stock_quantity
+
+    await client.post(
+        "/api/v1/cart/items",
+        json={
+            "items": [
+                {
+                    "product_id": test_product.id,
+                    "quantity": 3,
+                }
+            ]
+        },
+        headers=auth_headers,
+    )
+
+    order = (
+        await client.post(
+            "/api/v1/orders/checkout",
+            headers=auth_headers,
+        )
+    ).json()
+
+    order_id = order["id"]
+
+    marked_paid = await client.patch(
+        f"/api/v1/orders/admin/{order_id}/status",
+        json={"status": "paid"},
+        headers=admin_headers,
+    )
+    assert marked_paid.status_code == 200
+
+    after_paid = await db_session.scalar(
+        select(Product).where(Product.id == test_product.id)
+    )
+    assert after_paid.stock_quantity == stock_before - 3
+
+    moved_back = await client.patch(
+        f"/api/v1/orders/admin/{order_id}/status",
+        json={"status": "pending_payment"},
+        headers=admin_headers,
+    )
+    assert moved_back.status_code == 200
+
+    after_restore = await db_session.scalar(
+        select(Product).where(Product.id == test_product.id)
+    )
+    assert after_restore.stock_quantity == stock_before
+
+
+@pytest.mark.asyncio
+async def test_qr_info_returns_payload_with_phone_and_amount(
+    client: AsyncClient,
+    auth_headers: dict,
+    test_product,
+):
+    await client.post(
+        "/api/v1/cart/items",
+        json={
+            "items": [
+                {
+                    "product_id": test_product.id,
+                    "quantity": 1,
+                }
+            ]
+        },
+        headers=auth_headers,
+    )
+
+    order = (
+        await client.post(
+            "/api/v1/orders/checkout",
+            headers=auth_headers,
+        )
+    ).json()
+
+    response = await client.get(
+        f"/api/v1/orders/{order['id']}/qr-info",
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+
+    assert data["order_id"] == order["id"]
+    assert data["amount"] == 10.0
+    assert "+7" in data["phone"]
+    assert "Сбер" in data["bank_name"]
+    assert "Оплата заказа" in data["payload"]
+    assert "10.00 ₽" in data["payload"]
+
+
+@pytest.mark.asyncio
+async def test_qr_info_for_other_user_forbidden(
+    client: AsyncClient,
+    auth_headers: dict,
+    second_user_headers: dict,
+    test_product,
+):
+    await client.post(
+        "/api/v1/cart/items",
+        json={
+            "items": [
+                {
+                    "product_id": test_product.id,
+                    "quantity": 1,
+                }
+            ]
+        },
+        headers=auth_headers,
+    )
+
+    order = (
+        await client.post(
+            "/api/v1/orders/checkout",
+            headers=auth_headers,
+        )
+    ).json()
+
+    response = await client.get(
+        f"/api/v1/orders/{order['id']}/qr-info",
+        headers=second_user_headers,
+    )
+
+    assert response.status_code == 404

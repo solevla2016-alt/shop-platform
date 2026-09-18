@@ -45,6 +45,14 @@ class ShippingStatusUpdate(BaseModel):
     shipping_status: Literal["sorting", "ready", "shipped"]
 
 
+class OrderQrInfo(BaseModel):
+    order_id: int
+    phone: str
+    bank_name: str
+    amount: float
+    payload: str
+
+
 class CheckoutRequest(BaseModel):
     product_ids: list[int] | None = None
     delivery_method: Literal["pickup", "delivery"] | None = None

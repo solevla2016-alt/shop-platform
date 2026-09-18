@@ -966,7 +966,21 @@ function productCard(product) {
         : "";
 
     const isActive = Boolean(product.is_active);
+    const stock = Number(product.stock_quantity ?? 0);
+    const outOfStock = isActive && stock <= 0;
     const wishlisted = isWishlisted(id);
+
+    const stockHtml = `
+        <div class="product-stock ${
+            outOfStock ? "out" : stock <= 5 ? "low" : ""
+        }}">
+            ${
+                outOfStock
+                    ? "Нет в наличии"
+                    : `В наличии: ${stock} шт.`
+            }
+        </div>
+    `;
 
     return `
         <article class="product-card" data-id="${id}">
@@ -1003,6 +1017,8 @@ function productCard(product) {
 
             ${sizeHtml}
 
+            ${stockHtml}
+
             <div class="product-price">
                 ${formatMoney(product.price)}
             </div>
@@ -1011,9 +1027,9 @@ function productCard(product) {
                 class="btn btn-primary"
                 data-action="add-to-cart"
                 data-id="${id}"
-                ${!isActive ? "disabled" : ""}
+                ${!isActive || outOfStock ? "disabled" : ""}
             >
-                ${isActive ? "В корзину" : "Недоступен"}
+                ${outOfStock ? "Нет в наличии" : "В корзину"}
             </button>
         </article>
     `;
@@ -1143,6 +1159,8 @@ async function showProduct(productId) {
         const size = escapeHtml(product.size || "");
         const description = escapeHtml(product.description || "");
         const isActive = Boolean(product.is_active);
+        const stock = Number(product.stock_quantity ?? 0);
+        const outOfStock = isActive && stock <= 0;
         const wishlisted = isWishlisted(id);
 
         const category = getCategoryById(product.category_id);
@@ -1203,6 +1221,11 @@ async function showProduct(productId) {
                                     ? `<span>Размер: ${size}</span>`
                                     : ""
                             }
+                            ${
+                                !outOfStock
+                                    ? `<span>В наличии: ${stock} шт.</span>`
+                                    : `<span>Нет в наличии</span>`
+                            }
                         </div>
 
                         <div class="product-detail-buttons">
@@ -1224,9 +1247,9 @@ async function showProduct(productId) {
                                 class="btn btn-primary"
                                 data-action="order-product"
                                 data-id="${id}"
-                                ${!isActive ? "disabled" : ""}
+                                ${!isActive || outOfStock ? "disabled" : ""}
                             >
-                                Заказать
+                                ${outOfStock ? "Нет в наличии" : "Заказать"}
                             </button>
 
                             <button
@@ -1234,7 +1257,7 @@ async function showProduct(productId) {
                                 class="btn btn-secondary"
                                 data-action="add-to-cart"
                                 data-id="${id}"
-                                ${!isActive ? "disabled" : ""}
+                                ${!isActive || outOfStock ? "disabled" : ""}
                             >
                                 Добавить в корзину
                             </button>
@@ -2117,6 +2140,16 @@ function adminProductRow(product) {
                     }
                 </span>
 
+                <span class="badge ${
+                    Number(product.stock_quantity ?? 0) <= 0
+                        ? "inactive"
+                        : ""
+                }">
+                    Остаток: ${Number(
+                        product.stock_quantity ?? 0
+                    )} шт.
+                </span>
+
                 <button
                     class="btn btn-secondary btn-sm"
                     data-action="edit-product"
@@ -2727,6 +2760,7 @@ async function editProduct(productId) {
     const name = $("#product-name");
     const sku = $("#product-sku");
     const price = $("#product-price");
+    const stock = $("#product-stock");
     const category = $("#product-category-create");
     const size = $("#product-size");
     const description = $("#product-description");
@@ -2740,6 +2774,7 @@ async function editProduct(productId) {
     if (name) name.value = product.name || "";
     if (sku) sku.value = product.sku || "";
     if (price) price.value = product.price ?? "";
+    if (stock) stock.value = product.stock_quantity ?? 0;
     if (size) size.value = product.size || "";
     if (description) description.value = product.description || "";
     if (active) active.checked = product.is_active !== false;
@@ -2985,6 +3020,8 @@ function openPaymentModal(orderId) {
 
         </div>
 
+        <div id="payment-qr-block" class="hidden"></div>
+
         <div style="
             display: flex;
             gap: 12px;
@@ -3024,6 +3061,11 @@ function openPaymentModal(orderId) {
 
                 selectedPaymentMethod =
                     element.dataset.method;
+
+                showPaymentQrForMethod(
+                    content,
+                    element.dataset.method
+                );
 
                 const confirmButton =
                     content.querySelector(
@@ -3067,6 +3109,98 @@ function closePaymentModal() {
 
     currentOrderId = null;
     selectedPaymentMethod = null;
+}
+
+
+function showPaymentQrForMethod(content, method) {
+    const block = content.querySelector(
+        "#payment-qr-block"
+    );
+
+    if (!block) {
+        return;
+    }
+
+    if (method === "sbp") {
+        block.classList.remove("hidden");
+        loadPaymentQr(block);
+    } else {
+        block.classList.add("hidden");
+        block.innerHTML = "";
+    }
+}
+
+
+async function loadPaymentQr(block) {
+    if (!currentOrderId) {
+        return;
+    }
+
+    block.innerHTML = `
+        <div class="payment-processing">
+            <div class="spinner"></div>
+            <p>Загрузка QR-кода...</p>
+        </div>
+    `;
+
+    try {
+        const info = await apiFetch(
+            `/orders/${Number(currentOrderId)}/qr-info`
+        );
+
+        block.innerHTML = `
+            <div class="payment-qr">
+                <div id="payment-qr-canvas"></div>
+
+                <div class="payment-qr-info">
+                    <div>Получатель: ${escapeHtml(
+                        info.phone
+                    )}</div>
+                    <div>Банк: ${escapeHtml(
+                        info.bank_name
+                    )}</div>
+                    <div>
+                        Сумма: ${formatMoney(
+                            Math.round(
+                                Number(info.amount) * 100
+                            )
+                        )}
+                    </div>
+                </div>
+
+                <p class="payment-qr-hint">
+                    Отсканируйте QR-код или переведите
+                    сумму по номеру телефона в приложении
+                    ${escapeHtml(info.bank_name)}Банк.
+                    В комментарии укажите номер заказа.
+                </p>
+            </div>
+        `;
+
+        const canvasHost = document.getElementById(
+            "payment-qr-canvas"
+        );
+
+        if (canvasHost && typeof QRCode !== "undefined") {
+            new QRCode(canvasHost, {
+                text: info.payload,
+                width: 200,
+                height: 200,
+                correctLevel:
+                    QRCode.CorrectLevel.M,
+            });
+        }
+    } catch (error) {
+        block.innerHTML = `
+            <p style="
+                text-align: center;
+                color: var(--text-secondary);
+                padding: 12px;
+            ">
+                ${escapeHtml(error.message)}
+            </p>
+        `;
+    }
 }
 
 
@@ -3750,6 +3884,21 @@ function bindForms() {
                             "#product-is-active"
                         )?.checked ?? true;
 
+                    const stockQuantity = Number(
+                        $("#product-stock")?.value
+                    );
+
+                    if (
+                        !Number.isFinite(stockQuantity) ||
+                        stockQuantity < 0
+                    ) {
+                        showToast(
+                            "Введите корректный остаток.",
+                            "error"
+                        );
+                        return;
+                    }
+
                     const imageFile =
                         $("#product-image-file")
                             ?.files?.[0];
@@ -3769,6 +3918,7 @@ function bindForms() {
                             size,
                             description,
                             is_active: isActive,
+                            stock_quantity: stockQuantity,
                         };
 
                         if (imageFile) {
@@ -3817,6 +3967,7 @@ function bindForms() {
                             description,
                             image_url: imageUrl,
                             is_active: isActive,
+                            stock_quantity: stockQuantity,
                         });
 
                         createProductForm.reset();

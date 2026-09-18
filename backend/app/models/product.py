@@ -47,6 +47,13 @@ class Product(Base):
         nullable=False,
     )
 
+    stock_quantity = Column(
+        Integer,
+        nullable=False,
+        default=0,
+        server_default=text("0"),
+    )
+
     is_active = Column(
         Boolean,
         default=True,

@@ -9,6 +9,7 @@ class ProductBase(BaseModel):
     description: str | None = Field(default=None, max_length=20000)
     image_url: str | None = Field(default=None, max_length=500)
     price: int = Field(gt=0)
+    stock_quantity: int = Field(default=0, ge=0)
     is_active: bool = True
     category_id: int = Field(gt=0)
     sku: str = Field(min_length=1, max_length=50)
@@ -29,6 +30,7 @@ class ProductUpdate(BaseModel):
     description: str | None = Field(default=None, max_length=20000)
     image_url: str | None = Field(default=None, max_length=500)
     price: int | None = Field(default=None, gt=0)
+    stock_quantity: int | None = Field(default=None, ge=0)
     is_active: bool | None = None
     category_id: int | None = Field(default=None, gt=0)
     sku: str | None = Field(default=None, min_length=1, max_length=50)

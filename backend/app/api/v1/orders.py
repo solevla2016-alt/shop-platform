@@ -2,19 +2,22 @@
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, status
-from sqlalchemy import delete, select
+from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.api.deps import get_admin_user, get_current_user
+from app.core.config import get_settings
 from app.core.exceptions import BadRequestError, NotFoundError
 from app.db.session import get_db
 from app.models.cart import Cart, CartItem
 from app.models.order import Order, OrderItem
+from app.models.product import Product
 from app.models.user import User
 from app.schemas.order import (
     CheckoutRequest,
     OrderOut,
+    OrderQrInfo,
     OrderStatusUpdate,
     PaymentRequest,
     ShippingStatusUpdate,
@@ -30,12 +33,53 @@ SHIPPING_STATUS_TEXT = {
 }
 
 
+def format_rubles(amount_kopecks: int) -> str:
+    rubles = amount_kopecks / 100
+    return f"{rubles:,.2f}".replace(",", " ")
+
+
 async def load_order(order_id: int, db: AsyncSession) -> Order | None:
     return await db.scalar(
         select(Order)
         .options(selectinload(Order.items))
         .where(Order.id == order_id)
     )
+
+
+async def decrement_stock(
+    order: Order,
+    db: AsyncSession,
+) -> None:
+    for item in order.items:
+        result = await db.execute(
+            update(Product)
+            .where(
+                Product.id == item.product_id,
+                Product.stock_quantity >= item.quantity,
+            )
+            .values(
+                stock_quantity=Product.stock_quantity - item.quantity
+            )
+        )
+        if result.rowcount != 1:
+            await db.rollback()
+            raise BadRequestError(
+                f"Недостаточно товара «{item.product_name}» на складе"
+            )
+
+
+async def restore_stock(
+    order: Order,
+    db: AsyncSession,
+) -> None:
+    for item in order.items:
+        await db.execute(
+            update(Product)
+            .where(Product.id == item.product_id)
+            .values(
+                stock_quantity=Product.stock_quantity + item.quantity
+            )
+        )
 
 
 @router.post("/checkout", response_model=OrderOut, status_code=status.HTTP_201_CREATED)
@@ -73,6 +117,12 @@ async def checkout(
 
         if product is None or not product.is_active:
             raise BadRequestError("One of cart products is unavailable")
+
+        if product.stock_quantity < item.quantity:
+            raise BadRequestError(
+                f"Недостаточно товара «{product.name}» на складе: "
+                f"в наличии {product.stock_quantity}"
+            )
 
         subtotal = product.price * item.quantity
         total += subtotal
@@ -163,6 +213,8 @@ async def pay_order(
     if order.status == "cancelled":
         raise BadRequestError("Order is cancelled")
 
+    await decrement_stock(order, db)
+
     order.status = "paid"
     order.payment_method = payload.payment_method
     order.shipping_status = order.shipping_status or "sorting"
@@ -236,13 +288,21 @@ async def admin_update_order_status(
     if order is None:
         raise NotFoundError("Заказ не найден")
 
+    was_paid = order.status == "paid"
+    will_be_paid = payload.status == "paid"
+
+    if not was_paid and will_be_paid:
+        await decrement_stock(order, db)
+    elif was_paid and not will_be_paid:
+        await restore_stock(order, db)
+
     order.status = payload.status
 
-    if payload.status == "paid" and order.paid_at is None:
+    if will_be_paid and order.paid_at is None:
         order.paid_at = datetime.now(timezone.utc)
         order.shipping_status = order.shipping_status or "sorting"
 
-    if payload.status != "paid":
+    if not will_be_paid:
         order.paid_at = None
         order.payment_method = None
 
@@ -289,6 +349,53 @@ async def admin_update_shipping_status(
     await db.commit()
 
     return await load_order(order.id, db)
+
+
+@router.get("/{order_id}/qr-info", response_model=OrderQrInfo)
+async def get_order_qr_info(
+    order_id: int,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    order = await load_order(order_id, db)
+
+    if order is None or (
+        order.user_id != user.id and not user.is_admin
+    ):
+        raise NotFoundError()
+
+    if order.status == "cancelled":
+        raise BadRequestError("Заказ отменён")
+
+    settings = get_settings()
+    phone_raw = settings.sbp_phone
+    phone_digits = "".join(ch for ch in phone_raw if ch.isdigit())
+
+    if len(phone_digits) == 11:
+        phone_display = (
+            f"+7 {phone_digits[1:4]} {phone_digits[4:7]}-"
+            f"{phone_digits[7:9]}-{phone_digits[9:11]}"
+        )
+    else:
+        phone_display = phone_raw
+
+    amount = round(order.total_amount / 100, 2)
+
+    payload = (
+        "СБП по номеру телефона\n"
+        f"Получатель: {phone_display}\n"
+        f"Банк получателя: {settings.sbp_bank_name}\n"
+        f"Сумма: {format_rubles(order.total_amount)} ₽\n"
+        f"Назначение: Оплата заказа №{order.id}"
+    )
+
+    return OrderQrInfo(
+        order_id=order.id,
+        phone=phone_display,
+        bank_name=settings.sbp_bank_name,
+        amount=amount,
+        payload=payload,
+    )
 
 
 @router.get("/admin/{order_id}", response_model=OrderOut)

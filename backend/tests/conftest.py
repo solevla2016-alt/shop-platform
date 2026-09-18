@@ -188,6 +188,7 @@ async def test_product(client, db_session):
     product = Product(
         name=f"Test Product {timestamp}",
         price=1000,
+        stock_quantity=100,
         is_active=True,
         category_id=1,
         sku=f"TEST-PRODUCT-{timestamp}",
