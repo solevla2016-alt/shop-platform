@@ -3288,14 +3288,20 @@ async function loadPaymentQr(block) {
             "payment-qr-canvas"
         );
 
-        if (canvasHost && typeof QRCode !== "undefined") {
-            new QRCode(canvasHost, {
-                text: info.payload,
-                width: 200,
-                height: 200,
-                correctLevel:
-                    QRCode.CorrectLevel.M,
-            });
+        if (
+            canvasHost &&
+            typeof qrcode !== "undefined"
+        ) {
+            const qr = qrcode(0, "M");
+
+            qr.addData(info.payload);
+            qr.make();
+
+            canvasHost.innerHTML =
+                qr.createSvgTag({
+                    cellSize: 4,
+                    margin: 2,
+                });
         }
     } catch (error) {
         block.innerHTML = `

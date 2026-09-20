@@ -773,7 +773,8 @@ h4 { font-size: 20px; }
   border-radius: 10px;
 }
 #payment-qr-canvas img,
-#payment-qr-canvas canvas {
+#payment-qr-canvas canvas,
+#payment-qr-canvas svg {
   display: block;
   max-width: 100%;
 }
