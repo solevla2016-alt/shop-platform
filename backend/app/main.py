@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import os
 from contextlib import asynccontextmanager
@@ -14,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.api.v1 import auth, products, cart, orders, categories, uploads
+from app.core.cleanup import cleanup_loop
 from app.core.config import settings
 from app.core.exceptions import (
     BadRequestError,
@@ -28,6 +30,8 @@ from app.db.session import get_db
 
 logger = logging.getLogger(__name__)
 
+_cleanup_task: asyncio.Task | None = None
+
 
 FRONTEND_DIR = os.path.abspath(
     os.path.join(
@@ -41,10 +45,18 @@ FRONTEND_DIR = os.path.abspath(
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    global _cleanup_task
     logger.info("Starting up...")
     settings.ensure_upload_dirs()
+    _cleanup_task = asyncio.create_task(cleanup_loop())
     yield
     logger.info("Shutting down...")
+    if _cleanup_task is not None:
+        _cleanup_task.cancel()
+        try:
+            await _cleanup_task
+        except asyncio.CancelledError:
+            pass
 
 
 app = FastAPI(

@@ -847,7 +847,7 @@ function renderSellerInfo() {
         sellerBox.innerHTML = `
             <div>${escapeHtml(info.orgName)}</div>
             <div>ИНН: ${escapeHtml(info.inn)}</div>
-            <div>ОГРНИП: ${escapeHtml(info.ogrn)}</div>
+            <div>${escapeHtml(info.type)}</div>
             <div>${escapeHtml(info.address)}</div>
         `;
     }

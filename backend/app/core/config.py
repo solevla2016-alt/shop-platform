@@ -51,6 +51,11 @@ class Settings(BaseSettings):
     password_reset_expire_minutes: int = Field(default=15, ge=5, le=60)
     rate_limit_auth_requests: int = Field(default=10, ge=1)
     rate_limit_auth_window_seconds: int = Field(default=60, ge=1)
+    cleanup_interval_minutes: int = Field(default=60, ge=1)
+    cleanup_reset_token_days: int = Field(default=30, ge=1)
+    cleanup_refresh_token_days: int = Field(default=30, ge=1)
+    cleanup_cart_days: int = Field(default=30, ge=1)
+    cleanup_orphan_uploads: bool = True
     admin_email: str | None = None
     admin_phone: str | None = None
     admin_password: str | None = None
