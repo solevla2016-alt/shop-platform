@@ -1,11 +1,15 @@
-"""Transactional email service using Resend."""
+"""Transactional email service using Yandex SMTP."""
 
+import asyncio
 import logging
 import os
+import smtplib
+import ssl
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+from email.utils import formataddr
 from html import escape
 from urllib.parse import quote
-
-import resend
 
 from app.core.config import settings
 
@@ -61,27 +65,91 @@ def build_password_reset_email(
     )
 
 
+def _validate_config() -> None:
+    if not settings.smtp_user.strip():
+        raise RuntimeError("SMTP_USER is not configured")
+
+    if not settings.smtp_password.strip():
+        raise RuntimeError("SMTP_PASSWORD is not configured")
+
+    if not settings.smtp_host.strip():
+        raise RuntimeError("SMTP_HOST is not configured")
+
+    if not settings.email_from.strip():
+        raise RuntimeError("EMAIL_FROM is not configured")
+
+
+def _send_sync(
+    recipient: str,
+    subject: str,
+    html: str,
+) -> None:
+    """Send an email through SMTP (blocking call, used with to_thread)."""
+
+    user = settings.smtp_user.strip()
+    password = settings.smtp_password.strip()
+    host = settings.smtp_host.strip()
+    port = settings.smtp_port
+
+    sender = settings.email_from.strip()
+    sender_name, sender_addr = _parse_sender(sender)
+
+    message = MIMEMultipart("alternative")
+    message["From"] = formataddr(
+        (sender_name, sender_addr)
+    )
+    message["To"] = recipient
+    message["Subject"] = subject
+    message["X-Mailer"] = "Tierra Shop"
+
+    message.attach(
+        MIMEText(
+            html,
+            "html",
+            "utf-8",
+        )
+    )
+
+    context = ssl.create_default_context()
+
+    with smtplib.SMTP_SSL(
+        host,
+        port,
+        context=context,
+        timeout=30,
+    ) as server:
+        server.login(
+            user,
+            password,
+        )
+        server.sendmail(
+            sender_addr,
+            [recipient],
+            message.as_string(),
+        )
+
+
+def _parse_sender(
+    sender: str,
+) -> tuple[str, str]:
+    """Split 'Name <email>' into display name and email address."""
+    if "<" in sender and sender.endswith(">"):
+        name, email = sender.split("<", maxsplit=1)
+        return name.strip(' "'), email.rstrip(">").strip()
+    return "", sender.strip()
+
+
 async def send_password_reset_email(
     email: str,
     reset_token: str,
 ) -> None:
     """
-    Send password reset email through Resend.
+    Send password reset email through Yandex SMTP.
     """
 
-    api_key = settings.resend_api_key.strip()
-    sender = settings.email_from.strip()
+    _validate_config()
+
     recipient = email.strip().lower()
-
-    if not api_key:
-        raise RuntimeError(
-            "RESEND_API_KEY is not configured"
-        )
-
-    if not sender:
-        raise RuntimeError(
-            "EMAIL_FROM is not configured"
-        )
 
     if not recipient:
         raise ValueError(
@@ -92,8 +160,6 @@ async def send_password_reset_email(
         raise ValueError(
             "Reset token must not be empty"
         )
-
-    resend.api_key = api_key
 
     encoded_token = quote(
         reset_token,
@@ -112,29 +178,20 @@ async def send_password_reset_email(
         reset_url
     )
 
-    params: resend.Emails.SendParams = {
-        "from": sender,
-        "to": [recipient],
-        "subject": "Восстановление пароля — Green Garden",
-        "html": html,
-    }
+    subject = "Восстановление пароля — Тьерра"
 
     try:
-        result = await resend.Emails.send_async(
-            params
-        )
-
-        email_id = getattr(
-            result,
-            "id",
-            None,
+        await asyncio.to_thread(
+            _send_sync,
+            recipient,
+            subject,
+            html,
         )
 
         logger.info(
             "Password reset email sent successfully. "
-            "recipient=%s email_id=%s",
+            "recipient=%s",
             recipient,
-            email_id,
         )
 
     except Exception:

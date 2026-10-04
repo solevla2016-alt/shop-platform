@@ -1,4 +1,4 @@
-# 🌿 Green Garden — e-commerce platform
+# 🌿 Тьерра (Tierra) — e-commerce platform
 
 Fullstack интернет-магазин растений на **FastAPI + PostgreSQL + SQLAlchemy + Alembic + vanilla JavaScript + Nginx + Docker Compose**.
 
@@ -121,7 +121,7 @@ CORS_ORIGINS=http://localhost:8080
 
 ```env
 RESEND_API_KEY=<resend-api-key>
-EMAIL_FROM=Green Garden <noreply@example.com>
+EMAIL_FROM=Тьерра <noreply@example.com>
 PASSWORD_RESET_EXPIRE_MINUTES=15
 ```
 

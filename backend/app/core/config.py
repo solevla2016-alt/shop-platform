@@ -17,7 +17,7 @@ class Settings(BaseSettings):
         case_sensitive=False,
         extra="ignore",
     )
-    app_name: str = "Green Garden"
+    app_name: str = "Тьерра (Tierra)"
     api_v1_prefix: str = "/api/v1"
     secret_key: str = Field(min_length=32)
     algorithm: str = "HS256"
@@ -46,7 +46,10 @@ class Settings(BaseSettings):
     frontend_url: str = "http://localhost:8080"
     sbp_phone: str = "+79787471867"
     sbp_bank_name: str = "Сбер"
-    resend_api_key: str = ""
+    smtp_host: str = "smtp.yandex.ru"
+    smtp_port: int = Field(default=465, ge=1)
+    smtp_user: str = ""
+    smtp_password: str = ""
     email_from: str = ""
     password_reset_expire_minutes: int = Field(default=15, ge=5, le=60)
     rate_limit_auth_requests: int = Field(default=10, ge=1)
