@@ -5,6 +5,6 @@ window.SELLER_INFO = {
     address: "г. Севастополь, тер. ТСН «СОЮЗ», д. 20",
     email: "dalexta@yandex.ru",
     phone: "+7 978 747-18-67",
-    siteUrl: "greengardencrimea.duckdns.org:8080",
+    siteUrl: "tierrashop.ru",
     bankName: "ПАО «Сбербанк»",
 };
