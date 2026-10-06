@@ -68,6 +68,21 @@ class User(Base):
         nullable=False,
     )
 
+    oferta_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
+    consent_pd_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
+    consent_pd_ip: Mapped[str | None] = mapped_column(
+        String(45),
+        nullable=True,
+    )
+
     cart: Mapped[Cart | None] = relationship(
         "Cart",
         back_populates="user",

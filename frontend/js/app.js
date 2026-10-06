@@ -1762,6 +1762,13 @@ function openCheckoutModal() {
                 >
             </div>
 
+            <p class="checkout-legal-note">
+                Оформляя заказ, вы принимаете условия
+                <a href="#" data-action="nav-view-from-checkout" data-view="oferta">договора оферты</a>
+                и соглашаетесь с
+                <a href="#" data-action="nav-view-from-checkout" data-view="privacy">политикой обработки персональных данных</a>.
+            </p>
+
             <div class="modal-buttons">
                 <button
                     type="button"
@@ -3848,10 +3855,19 @@ function bindForms() {
                     return;
                 }
 
+                const oferta = document.getElementById("register-oferta");
+                if (!oferta || !oferta.checked) {
+                    showToast(
+                        "Необходимо принять договор оферты.",
+                        "error"
+                    );
+                    return;
+                }
+
                 const consent = document.getElementById("register-consent");
                 if (!consent || !consent.checked) {
                     showToast(
-                        "Необходимо согласиться с условиями магазина и обработкой персональных данных.",
+                        "Необходимо отдельное согласие на обработку персональных данных.",
                         "error"
                     );
                     return;
@@ -3889,11 +3905,17 @@ function bindForms() {
                         password,
                         password_confirm:
                             passwordConfirm,
+                        accepts_oferta:
+                            oferta.checked,
+                        consent_pd:
+                            consent.checked,
                     });
 
                     showToast(
                         "Аккаунт успешно создан!"
                     );
+
+                    registerForm.reset();
                 } catch (error) {
                     showToast(
                         error.message,
@@ -4420,6 +4442,15 @@ function bindGlobalActions() {
                     "close-checkout-modal"
                 ) {
                     closeCheckoutModal();
+                    return;
+                }
+
+                if (
+                    action ===
+                    "nav-view-from-checkout"
+                ) {
+                    closeCheckoutModal();
+                    showView(target.dataset.view);
                     return;
                 }
 

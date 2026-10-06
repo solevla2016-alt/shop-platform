@@ -686,6 +686,8 @@ async def test_auth_registration_duplicate_phone(client: AsyncClient, regular_us
             "phone": regular_user.phone,
             "password": "Password123!",
             "password_confirm": "Password123!",
+            "accepts_oferta": True,
+            "consent_pd": True,
         },
     )
 
@@ -1518,6 +1520,8 @@ async def test_password_schema_and_registration_validation(
             "phone": "123",
             "password": "Password123!",
             "password_confirm": "Password123!",
+            "accepts_oferta": True,
+            "consent_pd": True,
         },
     )
 
@@ -1531,10 +1535,89 @@ async def test_password_schema_and_registration_validation(
             "phone": f"+7999{timestamp % 10000000:07d}",
             "password": "Password123!",
             "password_confirm": "Different123!",
+            "accepts_oferta": True,
+            "consent_pd": True,
         },
     )
 
     assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_registration_requires_explicit_consent(
+    client: AsyncClient,
+):
+    import time
+
+    timestamp = time.time_ns()
+    payload = {
+        "full_name": "Consent User",
+        "email": f"consent_{timestamp}@example.com",
+        "phone": f"+7999{timestamp % 10000000:07d}",
+        "password": "Password123!",
+        "password_confirm": "Password123!",
+    }
+
+    response = await client.post(
+        "/api/v1/auth/register",
+        json=payload,
+    )
+
+    assert response.status_code == 422
+
+    response = await client.post(
+        "/api/v1/auth/register",
+        json={**payload, "accepts_oferta": True, "consent_pd": False},
+    )
+
+    assert response.status_code == 422
+
+    response = await client.post(
+        "/api/v1/auth/register",
+        json={**payload, "accepts_oferta": False, "consent_pd": True},
+    )
+
+    assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_registration_records_consent(
+    client: AsyncClient,
+    db_session,
+):
+    import time
+
+    from sqlalchemy import select
+
+    from app.models.user import User
+
+    timestamp = time.time_ns()
+    email = f"consent_ok_{timestamp}@example.com"
+
+    response = await client.post(
+        "/api/v1/auth/register",
+        headers={"X-Forwarded-For": "203.0.113.7, 10.0.0.1"},
+        json={
+            "full_name": "Consent User",
+            "email": email,
+            "phone": f"+7999{timestamp % 10000000:07d}",
+            "password": "Password123!",
+            "password_confirm": "Password123!",
+            "accepts_oferta": True,
+            "consent_pd": True,
+        },
+    )
+
+    assert response.status_code == 201
+
+    user = await db_session.scalar(
+        select(User).where(User.email == email)
+    )
+
+    assert user is not None
+    assert user.consent_pd_at is not None
+    assert user.oferta_at is not None
+    assert user.consent_pd_ip == "203.0.113.7"
 
 
 @pytest.mark.asyncio

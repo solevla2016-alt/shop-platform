@@ -43,6 +43,24 @@ class UserCreate(BaseModel):
         max_length=128,
     )
 
+    accepts_oferta: bool = Field(
+        description="Принятие условий договора оферты",
+    )
+
+    consent_pd: bool = Field(
+        description=(
+            "Отдельное согласие на обработку персональных данных"
+        ),
+    )
+
+    @field_validator("accepts_oferta", "consent_pd")
+    @classmethod
+    def validate_required_consent(cls, value: bool) -> bool:
+        """Both agreements must be granted explicitly."""
+        if value is not True:
+            raise ValueError("Требуется явное согласие")
+        return value
+
     @field_validator("full_name")
     @classmethod
     def validate_full_name(cls, value: str) -> str:

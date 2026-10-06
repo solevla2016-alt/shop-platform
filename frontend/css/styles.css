@@ -384,10 +384,11 @@ h4 { font-size: 20px; }
 .checkbox-group { flex-direction: row; align-items: center; }
 .checkbox-group label { display: flex; align-items: center; gap: 12px; cursor: pointer; }
 
-.consent-group { align-items: flex-start; }
+.consent-group { flex-direction: column; align-items: flex-start; gap: 8px; }
 .consent-label { align-items: flex-start; line-height: 1.5; }
 .consent-label input { margin-top: 3px; flex-shrink: 0; }
 .consent-label span { color: var(--text-secondary); font-size: 13px; }
+.consent-label a { color: var(--accent); text-decoration: underline; }
 
 .modal-overlay {
   position: fixed;
@@ -584,6 +585,14 @@ h4 { font-size: 20px; }
 
 .modal-checkout { max-width: 460px; }
 .checkout-form { display: flex; flex-direction: column; gap: 16px; }
+.checkout-legal-note {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.5;
+  text-align: left;
+}
+.checkout-legal-note a { color: var(--accent); text-decoration: underline; }
 
 .admin-stats {
   display: grid;

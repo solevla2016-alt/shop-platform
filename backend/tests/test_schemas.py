@@ -12,6 +12,8 @@ def make_user(**overrides):
         "phone": "+79991234567",
         "password": "Sup3r$ecret",
         "password_confirm": "Sup3r$ecret",
+        "accepts_oferta": True,
+        "consent_pd": True,
     }
     data.update(overrides)
     return UserCreate(**data)
@@ -81,3 +83,21 @@ def test_user_create_password_no_special():
 def test_user_create_passwords_mismatch():
     with pytest.raises(ValueError):
         make_user(password_confirm="OtherPassword!1")
+
+
+def test_user_create_consent_required():
+    with pytest.raises(ValueError):
+        make_user(consent_pd=False)
+
+    with pytest.raises(ValueError):
+        make_user(accepts_oferta=False)
+
+    with pytest.raises(ValueError):
+        make_user(consent_pd=None, accepts_oferta=None)
+
+
+def test_user_create_consent_defaults_present():
+    user = make_user()
+
+    assert user.consent_pd is True
+    assert user.accepts_oferta is True

@@ -4,11 +4,11 @@ import logging
 import secrets
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, Response, status
+from fastapi import APIRouter, Depends, Request, Response, status
 from sqlalchemy import or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import auth_rate_limiter, get_current_user
+from app.api.deps import _get_client_ip, auth_rate_limiter, get_current_user
 from app.core.config import settings
 from app.core.email import send_password_reset_email
 from app.core.exceptions import (
@@ -68,6 +68,12 @@ async def issue_tokens(user: User, db: AsyncSession) -> TokenResponse:
     )
 
 
+def consent_ip(request: Request) -> str | None:
+    """Real client IP recorded as part of the consent audit trail."""
+    ip = _get_client_ip(request)
+    return None if ip == "unknown" else ip
+
+
 @router.post(
     "/register",
     response_model=UserOut,
@@ -76,6 +82,7 @@ async def issue_tokens(user: User, db: AsyncSession) -> TokenResponse:
 )
 async def register(
     payload: UserCreate,
+    request: Request,
     db: AsyncSession = Depends(get_db),
 ) -> User:
     email = str(payload.email).strip().lower()
@@ -94,13 +101,23 @@ async def register(
         )
         raise ConflictError(message)
 
+    consent_at = datetime.now(timezone.utc)
     user = User(
         full_name=payload.full_name.strip(),
         email=email,
         phone=phone,
         password_hash=hash_password(payload.password),
+        oferta_at=consent_at,
+        consent_pd_at=consent_at,
+        consent_pd_ip=consent_ip(request),
     )
     db.add(user)
+
+    logger.info(
+        "PD consent recorded for %s (oferta, pd, ip=%s)",
+        email,
+        user.consent_pd_ip,
+    )
 
     try:
         await db.commit()
